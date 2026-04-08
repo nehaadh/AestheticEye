@@ -21,17 +21,31 @@ import com.example.aestheticeye.ui.components.ImageUploadCard
 import com.example.aestheticeye.ui.components.LoadingScreen
 import com.example.aestheticeye.ui.components.ResultDisplay
 import com.example.aestheticeye.viewmodel.MainViewModel
+import com.example.aestheticeye.viewmodel.ProductSource
+import androidx.compose.foundation.BorderStroke
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
 
-    val roomBitmap    by viewModel.roomBitmap.collectAsStateWithLifecycle()
-    val productBitmap by viewModel.productBitmap.collectAsStateWithLifecycle()
-    val detailBitmap  by viewModel.detailBitmap.collectAsStateWithLifecycle()
-    val prompt        by viewModel.prompt.collectAsStateWithLifecycle()
-    val uiState       by viewModel.uiState.collectAsStateWithLifecycle()
+    val roomBitmap     by viewModel.roomBitmap.collectAsStateWithLifecycle()
+    val productBitmap  by viewModel.productBitmap.collectAsStateWithLifecycle()
+    val detailBitmap   by viewModel.detailBitmap.collectAsStateWithLifecycle()
+    val prompt         by viewModel.prompt.collectAsStateWithLifecycle()
+    val uiState        by viewModel.uiState.collectAsStateWithLifecycle()
+    val productSource  by viewModel.productSource.collectAsStateWithLifecycle()
+    val showCatalog    by viewModel.showCatalog.collectAsStateWithLifecycle()
+
+    if (showCatalog) {
+        CatalogScreen(
+            onProductSelected = { bitmap, productName ->
+                viewModel.setProductFromCatalog(bitmap, productName)
+            },
+            onBack = { viewModel.closeCatalog() }
+        )
+        return
+    }
 
     Scaffold(
         topBar = {
@@ -39,7 +53,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text  = "✨ Aesthetic Eye",
+                            text  = "Aesthetic Eye",
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
@@ -48,10 +62,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                     }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                }
             )
         },
         containerColor = MaterialTheme.colorScheme.background
@@ -66,7 +77,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
-            // ── INPUT CARD ────────────────────────────────────────────────
+            // ── INPUT CARD ──
             Card(
                 modifier  = Modifier.fillMaxWidth(),
                 shape     = RoundedCornerShape(16.dp),
@@ -79,32 +90,45 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         text  = "Create Your Scene",
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                     )
+
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Row(
-                        modifier              = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        ImageUploadCard(
-                            label         = "1. Room Photo",
-                            icon          = Icons.Default.Add,
-                            bitmap        = roomBitmap,
-                            onImagePicked = { uri -> viewModel.setRoomImage(uri, context) },
-                            onClear       = { viewModel.setRoomImage(Uri.EMPTY, context) },
-                            modifier      = Modifier.weight(1f)
-                        )
-                        Column(
-                            modifier            = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                    // ✅ NEW 2x2 GRID
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+                        // ROW 1
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             ImageUploadCard(
-                                label         = "2. Product",
+                                label         = "1. Room Photo",
+                                icon          = Icons.Default.Add,
+                                bitmap        = roomBitmap,
+                                onImagePicked = { uri -> viewModel.setRoomImage(uri, context) },
+                                onClear       = { viewModel.setRoomImage(Uri.EMPTY, context) },
+                                modifier      = Modifier.weight(1f)
+                            )
+
+                            ImageUploadCard(
+                                label         = when (productSource) {
+                                    is ProductSource.Catalog ->
+                                        "2. ${(productSource as ProductSource.Catalog).productName}"
+                                    else -> "2. Product"
+                                },
                                 icon          = Icons.Default.Add,
                                 bitmap        = productBitmap,
                                 onImagePicked = { uri -> viewModel.setProductImage(uri, context) },
-                                onClear       = { viewModel.setProductImage(Uri.EMPTY, context) },
-                                modifier      = Modifier.fillMaxWidth()
+                                onClear       = { viewModel.clearProduct() },
+                                modifier      = Modifier.weight(1f)
                             )
+                        }
+
+                        // ROW 2
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
                             ImageUploadCard(
                                 label         = "3. Detail",
                                 icon          = Icons.Default.Add,
@@ -112,15 +136,47 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                                 onImagePicked = { uri -> viewModel.setDetailImage(uri, context) },
                                 onClear       = { viewModel.clearDetailImage() },
                                 optional      = true,
-                                modifier      = Modifier.fillMaxWidth()
+                                modifier      = Modifier.weight(1f)
                             )
+
+                            // 4. Browse Catalog (matching card)
+                            Card(
+                                onClick = { viewModel.openCatalog() },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .aspectRatio(1f),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(12.dp),
+                                    verticalArrangement = Arrangement.Center,
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "Or Browse",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(text = "4. Placement Instructions", style = MaterialTheme.typography.labelLarge)
+                    Text("5. Placement Instructions", style = MaterialTheme.typography.labelLarge)
                     Spacer(modifier = Modifier.height(6.dp))
+
                     OutlinedTextField(
                         value         = prompt,
                         onValueChange = { viewModel.setPrompt(it) },
@@ -158,7 +214,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                             Spacer(modifier = Modifier.width(10.dp))
                             Text("Generating...")
                         } else {
-                            Text("✨ Generate Scene & Review", style = MaterialTheme.typography.titleSmall)
+                            Text("Generate Scene & Review", style = MaterialTheme.typography.titleSmall)
                         }
                     }
 
@@ -173,7 +229,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 }
             }
 
-            // ── OUTPUT CARD ───────────────────────────────────────────────
+            // OUTPUT CARD (unchanged)
             Card(
                 modifier  = Modifier
                     .fillMaxWidth()
@@ -194,18 +250,10 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                                 modifier            = Modifier.align(Alignment.Center),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text("✨", style = MaterialTheme.typography.displayMedium)
-                                Spacer(modifier = Modifier.height(12.dp))
                                 Text(
                                     text  = "Your AI Feedback Awaits",
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text  = "Upload your images and let our Design Director provide expert feedback on your product placement.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                                 )
                             }
                         }
@@ -219,7 +267,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                                     onClick  = { viewModel.resetResult() },
                                     modifier = Modifier.align(Alignment.CenterHorizontally)
                                 ) {
-                                    Text("← Generate Another")
+                                    Text("Generate Another")
                                 }
                             }
                         }
@@ -228,12 +276,9 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                                 modifier            = Modifier.align(Alignment.Center),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text("⚠️", style = MaterialTheme.typography.displaySmall)
-                                Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text  = state.message,
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodyMedium
+                                    color = MaterialTheme.colorScheme.error
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 OutlinedButton(onClick = { viewModel.resetResult() }) {
