@@ -1,0 +1,202 @@
+[
+  {
+    "id": "room_001",
+    "name": "Modern Minimalist Living Room",
+    "style": "Modern Minimalist",
+    "roomType": "Living Room",
+    "description": "A bright, airy living room with clean lines, white walls, and natural light flooding through large windows.",
+    "imageUrl": "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=400&q=80",
+    "tags": ["modern", "minimalist", "white", "bright", "living room"]
+  },
+  {
+    "id": "room_002",
+    "name": "Cozy Scandinavian Bedroom",
+    "style": "Scandinavian",
+    "roomType": "Bedroom",
+    "description": "Warm Scandinavian bedroom with light wood floors, neutral textiles, and subtle hygge elements.",
+    "imageUrl": "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=400&q=80",
+    "tags": ["scandinavian", "cozy", "neutral", "bedroom", "hygge"]
+  },
+  {
+    "id": "room_003",
+    "name": "Industrial Loft Living Space",
+    "style": "Industrial",
+    "roomType": "Living Room",
+    "description": "Open-plan loft with exposed brick walls, steel beams, and concrete floors. Raw urban character.",
+    "imageUrl": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=400&q=80",
+    "tags": ["industrial", "loft", "brick", "urban", "living room"]
+  },
+  {
+    "id": "room_004",
+    "name": "Bright Farmhouse Kitchen",
+    "style": "Farmhouse",
+    "roomType": "Kitchen",
+    "description": "Sunlit farmhouse kitchen with white shaker cabinets, butcher block counters, and open shelving.",
+    "imageUrl": "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400&q=80",
+    "tags": ["farmhouse", "white", "bright", "kitchen", "shaker"]
+  },
+  {
+    "id": "room_005",
+    "name": "Mid-Century Modern Den",
+    "style": "Mid-Century Modern",
+    "roomType": "Living Room",
+    "description": "Retro-inspired den with teak furniture, geometric patterns, and warm amber tones from the 1960s.",
+    "imageUrl": "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&q=80",
+    "tags": ["mid-century", "retro", "teak", "warm", "living room"]
+  },
+  {
+    "id": "room_006",
+    "name": "Bohemian Eclectic Bedroom",
+    "style": "Bohemian",
+    "roomType": "Bedroom",
+    "description": "Layered bohemian bedroom with macramé, woven textiles, plants, and warm earthy colors throughout.",
+    "imageUrl": "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=400&q=80",
+    "tags": ["bohemian", "eclectic", "plants", "textured", "bedroom"]
+  },
+  {
+    "id": "room_007",
+    "name": "Sleek Modern Kitchen",
+    "style": "Contemporary",
+    "roomType": "Kitchen",
+    "description": "High-end contemporary kitchen with matte black cabinetry, quartz countertops, and integrated appliances.",
+    "imageUrl": "https://images.unsplash.com/photo-1556909114-44e3e70034e2?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1556909114-44e3e70034e2?w=400&q=80",
+    "tags": ["modern", "dark", "sleek", "kitchen", "luxury"]
+  },
+  {
+    "id": "room_008",
+    "name": "Coastal Beach House Living Room",
+    "style": "Coastal",
+    "roomType": "Living Room",
+    "description": "Light and breezy coastal living room with blue and white palette, rattan accents, and ocean views.",
+    "imageUrl": "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=400&q=80",
+    "tags": ["coastal", "blue", "white", "breezy", "living room"]
+  },
+  {
+    "id": "room_009",
+    "name": "Luxury Master Bedroom",
+    "style": "Luxury Modern",
+    "roomType": "Bedroom",
+    "description": "Opulent master bedroom with a tufted headboard, silk drapes, and a muted gold-and-cream palette.",
+    "imageUrl": "https://images.unsplash.com/photo-1616047006789-b7af5afb8c20?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1616047006789-b7af5afb8c20?w=400&q=80",
+    "tags": ["luxury", "master", "gold", "elegant", "bedroom"]
+  },
+  {
+    "id": "room_010",
+    "name": "Compact Home Office",
+    "style": "Modern",
+    "roomType": "Home Office",
+    "description": "Well-organized home office nook with a standing desk, shelving, and natural light. Clean and productive.",
+    "imageUrl": "https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=400&q=80",
+    "tags": ["office", "compact", "desk", "modern", "home office"]
+  },
+  {
+    "id": "room_011",
+    "name": "Rustic Dining Room",
+    "style": "Rustic",
+    "roomType": "Dining Room",
+    "description": "Warm rustic dining room with a reclaimed wood table, mismatched chairs, and pendant lighting overhead.",
+    "imageUrl": "https://images.unsplash.com/photo-1617806118233-18e1de247200?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1617806118233-18e1de247200?w=400&q=80",
+    "tags": ["rustic", "wood", "dining", "warm", "dining room"]
+  },
+  {
+    "id": "room_012",
+    "name": "Japanese Zen Living Room",
+    "style": "Japanese / Zen",
+    "roomType": "Living Room",
+    "description": "Calm zen-inspired space with low furniture, natural materials, shoji screens, and plenty of negative space.",
+    "imageUrl": "https://images.unsplash.com/photo-1545083036-b175dd155a1d?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1545083036-b175dd155a1d?w=400&q=80",
+    "tags": ["japanese", "zen", "minimal", "calm", "living room"]
+  },
+  {
+    "id": "room_013",
+    "name": "Art Deco Lounge",
+    "style": "Art Deco",
+    "roomType": "Living Room",
+    "description": "Glamorous art deco lounge with velvet upholstery, geometric patterns, brass accents, and jewel tones.",
+    "imageUrl": "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&q=80",
+    "tags": ["art deco", "glamorous", "velvet", "brass", "living room"]
+  },
+  {
+    "id": "room_014",
+    "name": "Open-Plan Studio Apartment",
+    "style": "Contemporary",
+    "roomType": "Studio",
+    "description": "Efficient studio apartment with defined zones for sleeping, working, and lounging in an open floor plan.",
+    "imageUrl": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=80",
+    "tags": ["studio", "open-plan", "compact", "modern", "apartment"]
+  },
+  {
+    "id": "room_015",
+    "name": "Outdoor Patio with Garden",
+    "style": "Natural / Outdoor",
+    "roomType": "Patio",
+    "description": "Lush outdoor patio with stone pavers, wooden furniture, string lights, and surrounding greenery.",
+    "imageUrl": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400&q=80",
+    "tags": ["outdoor", "patio", "garden", "green", "natural"]
+  },
+  {
+    "id": "room_016",
+    "name": "Transitional Bathroom",
+    "style": "Transitional",
+    "roomType": "Bathroom",
+    "description": "Spa-like bathroom with freestanding tub, marble tile, warm wood vanity, and brass fixtures.",
+    "imageUrl": "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=400&q=80",
+    "tags": ["bathroom", "spa", "marble", "transitional", "relaxing"]
+  },
+  {
+    "id": "room_017",
+    "name": "Kids Playroom",
+    "style": "Playful / Colorful",
+    "roomType": "Playroom",
+    "description": "Bright and cheerful kids playroom with toy storage, soft rugs, pastel colors, and whimsical wall art.",
+    "imageUrl": "https://images.unsplash.com/photo-1616627547584-bf28cee262db?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1616627547584-bf28cee262db?w=400&q=80",
+    "tags": ["kids", "playroom", "colorful", "fun", "bright"]
+  },
+  {
+    "id": "room_018",
+    "name": "Modern Entryway",
+    "style": "Modern",
+    "roomType": "Entryway",
+    "description": "Welcoming modern entryway with a slim console table, round mirror, hooks for coats, and a statement pendant.",
+    "imageUrl": "https://images.unsplash.com/photo-1618219908412-a29a1bb7b86e?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1618219908412-a29a1bb7b86e?w=400&q=80",
+    "tags": ["entryway", "modern", "mirror", "console", "welcoming"]
+  },
+  {
+    "id": "room_019",
+    "name": "Mediterranean Terrace",
+    "style": "Mediterranean",
+    "roomType": "Terrace",
+    "description": "Sun-drenched Mediterranean terrace with terracotta tiles, white stucco walls, olive trees, and iron railings.",
+    "imageUrl": "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=400&q=80",
+    "tags": ["mediterranean", "terrace", "sunny", "terracotta", "outdoor"]
+  },
+  {
+    "id": "room_020",
+    "name": "Dark Moody Library",
+    "style": "Traditional / Moody",
+    "roomType": "Library",
+    "description": "Rich, dark-toned library with floor-to-ceiling bookshelves, leather seating, and warm lamp light.",
+    "imageUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80",
+    "tags": ["library", "dark", "moody", "books", "traditional"]
+  }
+]
