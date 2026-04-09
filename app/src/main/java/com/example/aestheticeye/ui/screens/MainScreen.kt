@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,6 +21,7 @@ import com.example.aestheticeye.data.UiState
 import com.example.aestheticeye.ui.components.ImageUploadCard
 import com.example.aestheticeye.ui.components.LoadingScreen
 import com.example.aestheticeye.ui.components.ResultDisplay
+import com.example.aestheticeye.ui.components.UrlProductSheet
 import com.example.aestheticeye.viewmodel.MainViewModel
 import com.example.aestheticeye.viewmodel.ProductSource
 import androidx.compose.foundation.BorderStroke
@@ -36,6 +38,8 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     val uiState        by viewModel.uiState.collectAsStateWithLifecycle()
     val productSource  by viewModel.productSource.collectAsStateWithLifecycle()
     val showCatalog    by viewModel.showCatalog.collectAsStateWithLifecycle()
+    val showUrlSheet   by viewModel.showUrlSheet.collectAsStateWithLifecycle()
+    val urlProductState by viewModel.urlProductState.collectAsStateWithLifecycle()
 
     if (showCatalog) {
         CatalogScreen(
@@ -93,7 +97,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // ✅ NEW 2x2 GRID
+                    // ── 2x2 GRID ──
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
                         // ROW 1
@@ -114,6 +118,8 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                                 label         = when (productSource) {
                                     is ProductSource.Catalog ->
                                         "2. ${(productSource as ProductSource.Catalog).productName}"
+                                    is ProductSource.Url ->
+                                        "2. ${(productSource as ProductSource.Url).productName}"
                                     else -> "2. Product"
                                 },
                                 icon          = Icons.Default.Add,
@@ -170,6 +176,30 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                                 }
                             }
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // ── IMPORT FROM URL BUTTON ──
+                    OutlinedButton(
+                        onClick = { viewModel.openUrlSheet() },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Import Product from URL",
+                            style = MaterialTheme.typography.labelLarge
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -229,7 +259,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 }
             }
 
-            // OUTPUT CARD (unchanged)
+            // OUTPUT CARD
             Card(
                 modifier  = Modifier
                     .fillMaxWidth()
@@ -290,5 +320,15 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 }
             }
         }
+    }
+
+    // ── URL Product Bottom Sheet ────────────────────────────────────
+    if (showUrlSheet) {
+        UrlProductSheet(
+            state = urlProductState,
+            onExtract = { url -> viewModel.extractProductFromUrl(url) },
+            onUseProduct = { bitmap, name -> viewModel.setProductFromUrl(bitmap, name) },
+            onDismiss = { viewModel.closeUrlSheet() }
+        )
     }
 }

@@ -9,6 +9,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.aestheticeye.BuildConfig
 import com.example.aestheticeye.data.UiState
 import com.example.aestheticeye.network.GeminiService
+import com.example.aestheticeye.network.ProductUrlExtractor
+import com.example.aestheticeye.ui.components.UrlProductState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +19,7 @@ import kotlinx.coroutines.launch
 class MainViewModel : ViewModel() {
 
     private val geminiService = GeminiService(apiKey = BuildConfig.GEMINI_API_KEY)
+    private val urlExtractor = ProductUrlExtractor(apiKey = BuildConfig.GEMINI_API_KEY)
 
     private val _roomBitmap    = MutableStateFlow<Bitmap?>(null)
     private val _productBitmap = MutableStateFlow<Bitmap?>(null)
@@ -40,8 +43,24 @@ class MainViewModel : ViewModel() {
     private val _showCatalog = MutableStateFlow(false)
     val showCatalog: StateFlow<Boolean> = _showCatalog.asStateFlow()
 
+    // ── URL product extraction state ────────────────────────────────
+    private val _showUrlSheet = MutableStateFlow(false)
+    val showUrlSheet: StateFlow<Boolean> = _showUrlSheet.asStateFlow()
+
+    private val _urlProductState = MutableStateFlow<UrlProductState>(UrlProductState.Idle)
+    val urlProductState: StateFlow<UrlProductState> = _urlProductState.asStateFlow()
+
     fun openCatalog() { _showCatalog.value = true }
     fun closeCatalog() { _showCatalog.value = false }
+
+    fun openUrlSheet() {
+        _urlProductState.value = UrlProductState.Idle
+        _showUrlSheet.value = true
+    }
+    fun closeUrlSheet() {
+        _showUrlSheet.value = false
+        _urlProductState.value = UrlProductState.Idle
+    }
 
     fun setRoomImage(uri: Uri, context: Context) {
         _roomBitmap.value = uriToBitmap(uri, context)
@@ -70,6 +89,16 @@ class MainViewModel : ViewModel() {
         _showCatalog.value = false  // Return to main screen
     }
 
+    /**
+     * Set product from URL extraction — accepts a Bitmap and name.
+     */
+    fun setProductFromUrl(bitmap: Bitmap, productName: String) {
+        _productBitmap.value = bitmap
+        _productSource.value = ProductSource.Url(productName)
+        _showUrlSheet.value = false
+        _urlProductState.value = UrlProductState.Idle
+    }
+
     fun clearProduct() {
         _productBitmap.value = null
         _productSource.value = ProductSource.None
@@ -82,6 +111,31 @@ class MainViewModel : ViewModel() {
     fun resetResult() {
         _uiState.value = UiState.Idle
     }
+
+    // ── URL Product Extraction ──────────────────────────────────────
+
+    fun extractProductFromUrl(url: String) {
+        viewModelScope.launch {
+            _urlProductState.value = UrlProductState.Loading("Starting extraction...")
+
+            val result = urlExtractor.extractFromUrl(url) { step ->
+                _urlProductState.value = UrlProductState.Loading(step)
+            }
+
+            result.fold(
+                onSuccess = { (product, bitmap) ->
+                    _urlProductState.value = UrlProductState.Success(product, bitmap)
+                },
+                onFailure = { error ->
+                    _urlProductState.value = UrlProductState.Error(
+                        error.message ?: "Failed to extract product"
+                    )
+                }
+            )
+        }
+    }
+
+    // ── Scene Generation ────────────────────────────────────────────
 
     fun generateScene() {
         val room    = _roomBitmap.value
@@ -131,4 +185,5 @@ sealed class ProductSource {
     object None : ProductSource()
     object Camera : ProductSource()
     data class Catalog(val productName: String) : ProductSource()
+    data class Url(val productName: String) : ProductSource()
 }
