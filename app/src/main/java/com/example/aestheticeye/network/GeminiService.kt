@@ -17,6 +17,7 @@ import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
 class GeminiService(private val apiKey: String) {
+    //
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
