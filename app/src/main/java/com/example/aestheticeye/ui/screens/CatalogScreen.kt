@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -31,10 +32,24 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.aestheticeye.data.CatalogOptions
 import com.example.aestheticeye.data.FurnitureProduct
 import com.example.aestheticeye.viewmodel.CatalogUiState
 import com.example.aestheticeye.viewmodel.CatalogViewModel
+
+// ── Helper: build an ImageRequest with browser headers ──────────────────────
+
+@Composable
+private fun ikeaSafeImageRequest(url: String, description: String): ImageRequest {
+    return ImageRequest.Builder(LocalContext.current)
+        .data(url)
+        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+        .addHeader("Referer", "https://www.ikea.com/")
+        .addHeader("Accept", "image/webp,image/apng,image/*,*/*;q=0.8")
+        .crossfade(true)
+        .build()
+}
 
 /**
  * Full-screen catalog browser.
@@ -277,7 +292,7 @@ private fun ProductCard(
         } else null
     ) {
         Column {
-            // Product image
+            // Product image — with browser headers for IKEA CDN
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -286,7 +301,10 @@ private fun ProductCard(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 AsyncImage(
-                    model = product.thumbnail,
+                    model = ikeaSafeImageRequest(
+                        url = product.thumbnail,
+                        description = product.title
+                    ),
                     contentDescription = product.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
@@ -451,7 +469,7 @@ private fun ProductDetailSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Product image
+            // Product image — with browser headers
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -468,7 +486,10 @@ private fun ProductDetailSheet(
                     )
                 } else {
                     AsyncImage(
-                        model = product.images.firstOrNull() ?: product.thumbnail,
+                        model = ikeaSafeImageRequest(
+                            url = product.images.firstOrNull() ?: product.thumbnail,
+                            description = product.title
+                        ),
                         contentDescription = product.title,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize()
@@ -519,10 +540,30 @@ private fun ProductDetailSheet(
                 )
             }
 
-            product.dimensions?.let { dim ->
+            // Material info (for local/IKEA products)
+            if (product.material.isNotBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Dimensions: ${String.format("%.1f", dim.width)} × ${String.format("%.1f", dim.depth)} × ${String.format("%.1f", dim.height)} cm",
+                    text = "Material: ${product.material}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+            }
+
+            // Color info
+            if (product.color.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Color: ${product.color}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+            }
+
+            product.dimensions?.let { dim ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Dimensions: ${String.format("%.0f", dim.width)} × ${String.format("%.0f", dim.depth)} × ${String.format("%.0f", dim.height)} cm",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )

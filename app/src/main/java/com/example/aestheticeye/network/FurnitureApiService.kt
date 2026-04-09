@@ -200,6 +200,7 @@ class FurnitureApiService(private val context: Context) {
     /**
      * Download a product image as a Bitmap for use in the Gemini pipeline.
      * Tries the first full-size image, falls back to thumbnail.
+     * Includes browser headers so IKEA CDN serves the images.
      */
     suspend fun downloadProductImage(product: FurnitureProduct): Bitmap? =
         withContext(Dispatchers.IO) {
@@ -219,11 +220,18 @@ class FurnitureApiService(private val context: Context) {
 
     /**
      * Download any image URL as a Bitmap.
+     * Sends browser-like headers so CDNs (IKEA, Unsplash, etc.) serve images properly.
      */
     suspend fun downloadBitmap(url: String): Bitmap? =
         withContext(Dispatchers.IO) {
             try {
-                val request = Request.Builder().url(url).get().build()
+                val request = Request.Builder()
+                    .url(url)
+                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                    .addHeader("Referer", "https://www.ikea.com/")
+                    .addHeader("Accept", "image/webp,image/apng,image/*,*/*;q=0.8")
+                    .get()
+                    .build()
                 val response = client.newCall(request).execute()
                 if (!response.isSuccessful) return@withContext null
 
