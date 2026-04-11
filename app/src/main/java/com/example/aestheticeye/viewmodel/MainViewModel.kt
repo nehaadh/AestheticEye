@@ -279,7 +279,7 @@ class MainViewModel : ViewModel() {
             }
         }
     }
-
+//
     private fun uriToBitmap(uri: Uri, context: Context): Bitmap? {
         return try {
             context.contentResolver.openInputStream(uri)?.use { stream ->
