@@ -2,7 +2,6 @@ package com.example.aestheticeye.network
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.util.Base64
 import com.example.aestheticeye.data.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -12,12 +11,11 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
 /**
- * Extracts product information from any product URL (IKEA, Amazon, Wayfair, etc.)
- * by fetching the page HTML and sending it to Gemini for structured extraction.
+ * Extracts product information or images from any URL.
+ * Uses Gemini to parse HTML and extract structured data.
  */
 class ProductUrlExtractor(private val apiKey: String) {
 
@@ -40,9 +38,6 @@ class ProductUrlExtractor(private val apiKey: String) {
 
     private val baseUrl = "https://generativelanguage.googleapis.com/v1beta/models"
 
-    /**
-     * Data class for the extracted product info.
-     */
     @Serializable
     data class ExtractedProduct(
         val name: String = "",
@@ -57,36 +52,30 @@ class ProductUrlExtractor(private val apiKey: String) {
         val brand: String = ""
     )
 
-    /**
-     * Main extraction method:
-     * 1. Fetch the page HTML
-     * 2. Send to Gemini for structured extraction
-     * 3. Download the product image
-     * Returns a pair of (ExtractedProduct, Bitmap?)
-     */
-    suspend fun extractFromUrl(
+    @Serializable
+    data class ExtractedImage(
+        val imageUrl: String = "",
+        val title: String = ""
+    )
+
+    // ── Full product extraction (for product URLs) ──────────────────
+
+    suspend fun extractProductFromUrl(
         url: String,
         onStep: (String) -> Unit = {}
     ): Result<Pair<ExtractedProduct, Bitmap?>> = withContext(Dispatchers.IO) {
         try {
             onStep("Fetching product page...")
-
-            // 1. Fetch the HTML
             val html = fetchPageHtml(url)
-                ?: return@withContext Result.failure(Exception("Could not load the product page. Check the URL and try again."))
+                ?: return@withContext Result.failure(Exception("Could not load the page. Check the URL and try again."))
 
-            // Trim HTML to avoid token limits (keep first 15k chars — enough for product info)
             val trimmedHtml = if (html.length > 15000) html.take(15000) else html
 
             onStep("Extracting product details with AI...")
-
-            // 2. Send to Gemini for extraction
-            val extracted = extractWithGemini(trimmedHtml, url)
-                ?: return@withContext Result.failure(Exception("Could not extract product details. Try a different product URL."))
+            val extracted = extractProductWithGemini(trimmedHtml, url)
+                ?: return@withContext Result.failure(Exception("Could not extract product details. Try a different URL."))
 
             onStep("Downloading product image...")
-
-            // 3. Download the product image
             val bitmap = if (extracted.imageUrl.isNotBlank()) {
                 downloadImage(extracted.imageUrl)
             } else null
@@ -97,7 +86,60 @@ class ProductUrlExtractor(private val apiKey: String) {
         }
     }
 
-    // ── Fetch page HTML ─────────────────────────────────────────────────
+    // ── Simple image extraction (for room URLs, any image URL) ──────
+
+    suspend fun extractImageFromUrl(
+        url: String,
+        onStep: (String) -> Unit = {}
+    ): Result<Pair<String, Bitmap?>> = withContext(Dispatchers.IO) {
+        try {
+            // If the URL directly points to an image file, just download it
+            if (isDirectImageUrl(url)) {
+                onStep("Downloading image...")
+                val bitmap = downloadImage(url)
+                val title = url.substringAfterLast("/").substringBeforeLast(".")
+                return@withContext if (bitmap != null) {
+                    Result.success(Pair(title, bitmap))
+                } else {
+                    Result.failure(Exception("Could not download the image."))
+                }
+            }
+
+            // Otherwise, fetch the page and extract the main image URL
+            onStep("Fetching page...")
+            val html = fetchPageHtml(url)
+                ?: return@withContext Result.failure(Exception("Could not load the page."))
+
+            val trimmedHtml = if (html.length > 10000) html.take(10000) else html
+
+            onStep("Finding main image...")
+            val extracted = extractImageWithGemini(trimmedHtml, url)
+                ?: return@withContext Result.failure(Exception("Could not find an image on this page."))
+
+            onStep("Downloading image...")
+            val bitmap = if (extracted.imageUrl.isNotBlank()) {
+                downloadImage(extracted.imageUrl)
+            } else null
+
+            if (bitmap != null) {
+                Result.success(Pair(extracted.title, bitmap))
+            } else {
+                Result.failure(Exception("Could not download the image."))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(e.message ?: "Failed to extract image"))
+        }
+    }
+
+    // ── Private helpers ─────────────────────────────────────────────
+
+    private fun isDirectImageUrl(url: String): Boolean {
+        val lower = url.lowercase()
+        return lower.endsWith(".jpg") || lower.endsWith(".jpeg") ||
+                lower.endsWith(".png") || lower.endsWith(".webp") ||
+                lower.contains(".jpg?") || lower.contains(".jpeg?") ||
+                lower.contains(".png?") || lower.contains(".webp?")
+    }
 
     private fun fetchPageHtml(url: String): String? {
         return try {
@@ -108,61 +150,74 @@ class ProductUrlExtractor(private val apiKey: String) {
                 .addHeader("Accept-Language", "en-US,en;q=0.9")
                 .get()
                 .build()
-
             val response = httpClient.newCall(request).execute()
-            if (response.isSuccessful) {
-                response.body?.string()
-            } else null
-        } catch (e: Exception) {
-            null
-        }
+            if (response.isSuccessful) response.body?.string() else null
+        } catch (e: Exception) { null }
     }
 
-    // ── Gemini extraction ───────────────────────────────────────────────
-
-    private fun extractWithGemini(html: String, originalUrl: String): ExtractedProduct? {
+    private fun extractProductWithGemini(html: String, originalUrl: String): ExtractedProduct? {
         val prompt = """
             You are a product data extraction expert.
+            I will give you HTML from a product page. URL: $originalUrl
             
-            I will give you the HTML source of a product page from an online furniture/home store.
-            The original URL is: $originalUrl
-            
-            Extract the following product details and return ONLY a valid JSON object with no markdown formatting:
+            Extract product details and return ONLY a valid JSON object, no markdown:
             {
               "name": "<product name>",
-              "description": "<product description, 2-3 sentences>",
+              "description": "<2-3 sentence description>",
               "price": "<numeric price like 299.99>",
               "currency": "<USD, EUR, etc.>",
               "category": "<furniture, home-decoration, kitchen-accessories, or lighting>",
-              "material": "<materials used>",
-              "color": "<color name>",
-              "dimensions": "<width x depth x height in cm, or inches if cm not available>",
-              "imageUrl": "<FULL URL to the main product image - must start with https://>",
-              "brand": "<brand name>"
+              "material": "<materials>",
+              "color": "<color>",
+              "dimensions": "<W x D x H>",
+              "imageUrl": "<FULL absolute URL to main product image starting with https://>",
+              "brand": "<brand>"
             }
             
-            IMPORTANT for imageUrl:
-            - Find the main product image URL in the HTML (look for og:image meta tags, main product image src, or structured data)
-            - The URL must be a complete, absolute URL starting with https://
-            - Prefer the highest resolution image available
-            - For IKEA products, look for URLs containing ikea.com/us/en/images/products/
+            For imageUrl: look for og:image meta tag, main product image, or structured data.
+            Must be a complete URL starting with https://
+            Return ONLY the JSON, nothing else.
             
-            If you cannot find a field, use an empty string "".
-            Return ONLY the JSON object, no explanation, no markdown backticks.
-            
-            HTML SOURCE:
+            HTML:
             $html
         """.trimIndent()
 
+        val responseText = callGeminiText(prompt) ?: return null
+        return try {
+            val clean = responseText.replace("```json", "").replace("```", "").trim()
+            json.decodeFromString<ExtractedProduct>(clean)
+        } catch (e: Exception) { null }
+    }
+
+    private fun extractImageWithGemini(html: String, originalUrl: String): ExtractedImage? {
+        val prompt = """
+            Extract the main image URL and page title from this HTML.
+            URL: $originalUrl
+            
+            Return ONLY a JSON object, no markdown:
+            {"imageUrl": "<full https:// URL to the main/hero image>", "title": "<page title or image description>"}
+            
+            Look for: og:image meta tag, main hero image, largest product image.
+            Must be absolute URL starting with https://
+            
+            HTML:
+            $html
+        """.trimIndent()
+
+        val responseText = callGeminiText(prompt) ?: return null
+        return try {
+            val clean = responseText.replace("```json", "").replace("```", "").trim()
+            json.decodeFromString<ExtractedImage>(clean)
+        } catch (e: Exception) { null }
+    }
+
+    private fun callGeminiText(prompt: String): String? {
         val requestBody = json.encodeToString(
             GeminiRequest.serializer(),
             GeminiRequest(
-                contents = listOf(
-                    Content(parts = listOf(Part(text = prompt)))
-                )
+                contents = listOf(Content(parts = listOf(Part(text = prompt))))
             )
         )
-
         val url = "$baseUrl/gemini-2.5-flash:generateContent?key=$apiKey"
         val httpRequest = Request.Builder()
             .url(url)
@@ -171,28 +226,14 @@ class ProductUrlExtractor(private val apiKey: String) {
 
         val response = geminiClient.newCall(httpRequest).execute()
         val body = response.body?.string() ?: return null
-
         if (!response.isSuccessful) return null
 
         val geminiResponse = json.decodeFromString<GeminiResponse>(body)
-        val rawText = geminiResponse.candidates?.firstOrNull()
+        return geminiResponse.candidates?.firstOrNull()
             ?.content?.parts?.firstOrNull { it.text != null }?.text
-            ?: return null
-
-        return try {
-            val cleanJson = rawText
-                .replace("```json", "")
-                .replace("```", "")
-                .trim()
-            json.decodeFromString<ExtractedProduct>(cleanJson)
-        } catch (e: Exception) {
-            null
-        }
     }
 
-    // ── Image downloading ───────────────────────────────────────────────
-
-    private fun downloadImage(imageUrl: String): Bitmap? {
+    fun downloadImage(imageUrl: String): Bitmap? {
         return try {
             val request = Request.Builder()
                 .url(imageUrl)
@@ -201,15 +242,9 @@ class ProductUrlExtractor(private val apiKey: String) {
                 .addHeader("Accept", "image/webp,image/apng,image/*,*/*;q=0.8")
                 .get()
                 .build()
-
             val response = httpClient.newCall(request).execute()
             if (!response.isSuccessful) return null
-
-            response.body?.byteStream()?.use { stream ->
-                BitmapFactory.decodeStream(stream)
-            }
-        } catch (e: Exception) {
-            null
-        }
+            response.body?.byteStream()?.use { BitmapFactory.decodeStream(it) }
+        } catch (e: Exception) { null }
     }
 }

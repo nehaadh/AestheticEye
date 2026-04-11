@@ -7,7 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,35 +21,28 @@ import com.example.aestheticeye.data.UiState
 import com.example.aestheticeye.ui.components.ImageUploadCard
 import com.example.aestheticeye.ui.components.LoadingScreen
 import com.example.aestheticeye.ui.components.ResultDisplay
-import com.example.aestheticeye.ui.components.UrlProductSheet
+import com.example.aestheticeye.ui.components.UrlImportSheet
 import com.example.aestheticeye.viewmodel.MainViewModel
-import com.example.aestheticeye.viewmodel.ProductSource
-import androidx.compose.foundation.BorderStroke
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
 
-    val roomBitmap     by viewModel.roomBitmap.collectAsStateWithLifecycle()
-    val productBitmap  by viewModel.productBitmap.collectAsStateWithLifecycle()
-    val detailBitmap   by viewModel.detailBitmap.collectAsStateWithLifecycle()
+    val roomBitmap    by viewModel.roomBitmap.collectAsStateWithLifecycle()
+    val productBitmap by viewModel.productBitmap.collectAsStateWithLifecycle()
+    val detailBitmap  by viewModel.detailBitmap.collectAsStateWithLifecycle()
+
+    val roomLabel    by viewModel.roomLabel.collectAsStateWithLifecycle()
+    val productLabel by viewModel.productLabel.collectAsStateWithLifecycle()
+    val detailLabel  by viewModel.detailLabel.collectAsStateWithLifecycle()
+
     val prompt         by viewModel.prompt.collectAsStateWithLifecycle()
     val uiState        by viewModel.uiState.collectAsStateWithLifecycle()
-    val productSource  by viewModel.productSource.collectAsStateWithLifecycle()
-    val showCatalog    by viewModel.showCatalog.collectAsStateWithLifecycle()
+    val isIterating    by viewModel.isIterating.collectAsStateWithLifecycle()
+    val productsPlaced by viewModel.productsPlaced.collectAsStateWithLifecycle()
     val showUrlSheet   by viewModel.showUrlSheet.collectAsStateWithLifecycle()
-    val urlProductState by viewModel.urlProductState.collectAsStateWithLifecycle()
-
-    if (showCatalog) {
-        CatalogScreen(
-            onProductSelected = { bitmap, productName ->
-                viewModel.setProductFromCatalog(bitmap, productName)
-            },
-            onBack = { viewModel.closeCatalog() }
-        )
-        return
-    }
+    val urlImportState by viewModel.urlImportState.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -81,7 +74,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
-            // ── INPUT CARD ──
+            // ── INPUT CARD ──────────────────────────────────────────────
             Card(
                 modifier  = Modifier.fillMaxWidth(),
                 shape     = RoundedCornerShape(16.dp),
@@ -91,120 +84,77 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 Column(modifier = Modifier.padding(16.dp)) {
 
                     Text(
-                        text  = "Create Your Scene",
+                        text  = if (isIterating) "Add Another Product" else "Create Your Scene",
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = if (isIterating)
+                            "Pick your next product to add to the scene"
+                        else
+                            "Upload photos or paste URLs for each slot",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // ── 2x2 GRID ──
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // ── IMAGE SLOTS ──────────────────────────────────────
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
-                        // ROW 1
+                        // ROW 1: Room + Product
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             ImageUploadCard(
-                                label         = "1. Room Photo",
+                                label         = roomLabel,
                                 icon          = Icons.Default.Add,
                                 bitmap        = roomBitmap,
                                 onImagePicked = { uri -> viewModel.setRoomImage(uri, context) },
-                                onClear       = { viewModel.setRoomImage(Uri.EMPTY, context) },
+                                onClear       = { viewModel.clearRoom() },
+                                onUrlImport   = if (!isIterating) {
+                                    { viewModel.openUrlSheet(MainViewModel.ImageSlot.ROOM) }
+                                } else null,  // Don't allow changing room during iteration
                                 modifier      = Modifier.weight(1f)
                             )
 
                             ImageUploadCard(
-                                label         = when (productSource) {
-                                    is ProductSource.Catalog ->
-                                        "2. ${(productSource as ProductSource.Catalog).productName}"
-                                    is ProductSource.Url ->
-                                        "2. ${(productSource as ProductSource.Url).productName}"
-                                    else -> "2. Product"
-                                },
+                                label         = productLabel,
                                 icon          = Icons.Default.Add,
                                 bitmap        = productBitmap,
                                 onImagePicked = { uri -> viewModel.setProductImage(uri, context) },
                                 onClear       = { viewModel.clearProduct() },
+                                onUrlImport   = { viewModel.openUrlSheet(MainViewModel.ImageSlot.PRODUCT) },
                                 modifier      = Modifier.weight(1f)
                             )
                         }
 
-                        // ROW 2
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
+                        // ROW 2: Detail (full width)
+                        if (!isIterating) {
                             ImageUploadCard(
-                                label         = "3. Detail",
+                                label         = detailLabel,
                                 icon          = Icons.Default.Add,
                                 bitmap        = detailBitmap,
                                 onImagePicked = { uri -> viewModel.setDetailImage(uri, context) },
-                                onClear       = { viewModel.clearDetailImage() },
+                                onClear       = { viewModel.clearDetail() },
+                                onUrlImport   = { viewModel.openUrlSheet(MainViewModel.ImageSlot.DETAIL) },
                                 optional      = true,
-                                modifier      = Modifier.weight(1f)
+                                modifier      = Modifier
+                                    .fillMaxWidth(0.48f)
                             )
-
-                            // 4. Browse Catalog (matching card)
-                            Card(
-                                onClick = { viewModel.openCatalog() },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .aspectRatio(1f),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(12.dp),
-                                    verticalArrangement = Arrangement.Center,
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = "Or Browse",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
                         }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // ── IMPORT FROM URL BUTTON ──
-                    OutlinedButton(
-                        onClick = { viewModel.openUrlSheet() },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(
-                            1.dp,
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                        )
-                    ) {
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            "Import Product from URL",
-                            style = MaterialTheme.typography.labelLarge
-                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Text("5. Placement Instructions", style = MaterialTheme.typography.labelLarge)
+                    // ── PLACEMENT INSTRUCTIONS ──────────────────────────
+                    Text(
+                        if (isIterating) "Placement for this product" else "4. Placement Instructions",
+                        style = MaterialTheme.typography.labelLarge
+                    )
                     Spacer(modifier = Modifier.height(6.dp))
 
                     OutlinedTextField(
@@ -215,7 +165,10 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         maxLines      = 4,
                         placeholder   = {
                             Text(
-                                "e.g., Place the blinds over the largest window.",
+                                if (isIterating)
+                                    "e.g., Place the lamp on the side table next to the sofa."
+                                else
+                                    "e.g., Place the sofa against the main wall.",
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                             )
                         },
@@ -224,6 +177,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // ── GENERATE BUTTON ─────────────────────────────────
                     val isLoading   = uiState is UiState.Loading
                     val canGenerate = roomBitmap != null && productBitmap != null && !isLoading
 
@@ -244,7 +198,29 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                             Spacer(modifier = Modifier.width(10.dp))
                             Text("Generating...")
                         } else {
-                            Text("Generate Scene & Review", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                if (isIterating) "Add Product to Scene"
+                                else "Generate Scene & Review",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
+                    }
+
+                    // Start Over button during iteration
+                    if (isIterating) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick  = { viewModel.startOver() },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape    = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Start Over with Original Room")
                         }
                     }
 
@@ -259,7 +235,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 }
             }
 
-            // OUTPUT CARD
+            // ── OUTPUT CARD ─────────────────────────────────────────────
             Card(
                 modifier  = Modifier
                     .fillMaxWidth()
@@ -281,7 +257,10 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text  = "Your AI Feedback Awaits",
+                                    text  = if (isIterating)
+                                        "Pick your next product above"
+                                    else
+                                        "Your AI Feedback Awaits",
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                 )
@@ -293,11 +272,43 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         is UiState.Success -> {
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 ResultDisplay(result = state.result)
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                // ── Add Another Product button ──────────
+                                state.result.generatedBitmap?.let { generatedBitmap ->
+                                    Button(
+                                        onClick  = { viewModel.addAnotherProduct(generatedBitmap) },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(48.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Add,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            "Add Another Product to This Scene",
+                                            style = MaterialTheme.typography.labelLarge
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+
+                                // ── Done / Start Over ───────────────────
                                 TextButton(
                                     onClick  = { viewModel.resetResult() },
                                     modifier = Modifier.align(Alignment.CenterHorizontally)
                                 ) {
-                                    Text("Generate Another")
+                                    Text("Done — Start New Scene")
                                 }
                             }
                         }
@@ -322,13 +333,14 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         }
     }
 
-    // ── URL Product Bottom Sheet ────────────────────────────────────
+    // ── URL Import Bottom Sheet ─────────────────────────────────────
     if (showUrlSheet) {
-        UrlProductSheet(
-            state = urlProductState,
-            onExtract = { url -> viewModel.extractProductFromUrl(url) },
-            onUseProduct = { bitmap, name -> viewModel.setProductFromUrl(bitmap, name) },
-            onDismiss = { viewModel.closeUrlSheet() }
+        UrlImportSheet(
+            slotType   = viewModel.getSlotType(),
+            state      = urlImportState,
+            onExtract  = { url -> viewModel.extractFromUrl(url) },
+            onUseImage = { bitmap, name -> viewModel.useImportedImage(bitmap, name) },
+            onDismiss  = { viewModel.closeUrlSheet() }
         )
     }
 }

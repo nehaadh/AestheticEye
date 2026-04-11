@@ -10,7 +10,8 @@ import com.example.aestheticeye.BuildConfig
 import com.example.aestheticeye.data.UiState
 import com.example.aestheticeye.network.GeminiService
 import com.example.aestheticeye.network.ProductUrlExtractor
-import com.example.aestheticeye.ui.components.UrlProductState
+import com.example.aestheticeye.ui.components.ImportSlotType
+import com.example.aestheticeye.ui.components.UrlImportState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,6 +22,7 @@ class MainViewModel : ViewModel() {
     private val geminiService = GeminiService(apiKey = BuildConfig.GEMINI_API_KEY)
     private val urlExtractor = ProductUrlExtractor(apiKey = BuildConfig.GEMINI_API_KEY)
 
+    // ── Image slots ─────────────────────────────────────────────────
     private val _roomBitmap    = MutableStateFlow<Bitmap?>(null)
     private val _productBitmap = MutableStateFlow<Bitmap?>(null)
     private val _detailBitmap  = MutableStateFlow<Bitmap?>(null)
@@ -29,79 +31,86 @@ class MainViewModel : ViewModel() {
     val productBitmap: StateFlow<Bitmap?> = _productBitmap.asStateFlow()
     val detailBitmap:  StateFlow<Bitmap?> = _detailBitmap.asStateFlow()
 
-    private val _prompt = MutableStateFlow("Place the product on the window, making it look natural.")
+    // ── Labels ──────────────────────────────────────────────────────
+    private val _roomLabel    = MutableStateFlow("1. Room Photo")
+    private val _productLabel = MutableStateFlow("2. Product")
+    private val _detailLabel  = MutableStateFlow("3. Detail")
+
+    val roomLabel:    StateFlow<String> = _roomLabel.asStateFlow()
+    val productLabel: StateFlow<String> = _productLabel.asStateFlow()
+    val detailLabel:  StateFlow<String> = _detailLabel.asStateFlow()
+
+    // ── Prompt and UI state ─────────────────────────────────────────
+    private val _prompt = MutableStateFlow("")
     val prompt: StateFlow<String> = _prompt.asStateFlow()
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    // ── Track whether product came from catalog ─────────────────────
-    private val _productSource = MutableStateFlow<ProductSource>(ProductSource.None)
-    val productSource: StateFlow<ProductSource> = _productSource.asStateFlow()
+    // ── Iterative mode: tracks whether we're adding more products ───
+    // When true, the generated scene becomes the new room base and
+    // the user can pick another product to add.
+    private val _isIterating = MutableStateFlow(false)
+    val isIterating: StateFlow<Boolean> = _isIterating.asStateFlow()
 
-    // ── Navigation state for showing catalog ────────────────────────
-    private val _showCatalog = MutableStateFlow(false)
-    val showCatalog: StateFlow<Boolean> = _showCatalog.asStateFlow()
+    // Keeps track of how many products have been placed
+    private val _productsPlaced = MutableStateFlow(0)
+    val productsPlaced: StateFlow<Int> = _productsPlaced.asStateFlow()
 
-    // ── URL product extraction state ────────────────────────────────
+    // Stores the original room so user can "Start Over"
+    private var originalRoomBitmap: Bitmap? = null
+
+    // ── URL Import Sheet state ──────────────────────────────────────
     private val _showUrlSheet = MutableStateFlow(false)
     val showUrlSheet: StateFlow<Boolean> = _showUrlSheet.asStateFlow()
 
-    private val _urlProductState = MutableStateFlow<UrlProductState>(UrlProductState.Idle)
-    val urlProductState: StateFlow<UrlProductState> = _urlProductState.asStateFlow()
+    private val _urlImportState = MutableStateFlow<UrlImportState>(UrlImportState.Idle)
+    val urlImportState: StateFlow<UrlImportState> = _urlImportState.asStateFlow()
 
-    fun openCatalog() { _showCatalog.value = true }
-    fun closeCatalog() { _showCatalog.value = false }
+    private val _activeSlot = MutableStateFlow<ImageSlot>(ImageSlot.ROOM)
+    val activeSlot: StateFlow<ImageSlot> = _activeSlot.asStateFlow()
 
-    fun openUrlSheet() {
-        _urlProductState.value = UrlProductState.Idle
-        _showUrlSheet.value = true
-    }
-    fun closeUrlSheet() {
-        _showUrlSheet.value = false
-        _urlProductState.value = UrlProductState.Idle
-    }
+    enum class ImageSlot { ROOM, PRODUCT, DETAIL }
+
+    // ── Camera/Gallery setters ──────────────────────────────────────
 
     fun setRoomImage(uri: Uri, context: Context) {
-        _roomBitmap.value = uriToBitmap(uri, context)
+        val bmp = uriToBitmap(uri, context)
+        _roomBitmap.value = bmp
+        originalRoomBitmap = bmp
+        _roomLabel.value = "1. Room Photo"
+        _isIterating.value = false
+        _productsPlaced.value = 0
     }
 
     fun setProductImage(uri: Uri, context: Context) {
         _productBitmap.value = uriToBitmap(uri, context)
-        _productSource.value = ProductSource.Camera
+        _productLabel.value = "2. Product"
     }
 
     fun setDetailImage(uri: Uri, context: Context) {
         _detailBitmap.value = uriToBitmap(uri, context)
+        _detailLabel.value = "3. Detail"
     }
 
-    fun clearDetailImage() {
-        _detailBitmap.value = null
-    }
+    // ── Clear functions ─────────────────────────────────────────────
 
-    /**
-     * Set product from catalog — accepts a Bitmap directly
-     * instead of a Uri, since the image was downloaded from the API.
-     */
-    fun setProductFromCatalog(bitmap: Bitmap, productName: String) {
-        _productBitmap.value = bitmap
-        _productSource.value = ProductSource.Catalog(productName)
-        _showCatalog.value = false  // Return to main screen
-    }
-
-    /**
-     * Set product from URL extraction — accepts a Bitmap and name.
-     */
-    fun setProductFromUrl(bitmap: Bitmap, productName: String) {
-        _productBitmap.value = bitmap
-        _productSource.value = ProductSource.Url(productName)
-        _showUrlSheet.value = false
-        _urlProductState.value = UrlProductState.Idle
+    fun clearRoom() {
+        _roomBitmap.value = null
+        originalRoomBitmap = null
+        _roomLabel.value = "1. Room Photo"
+        _isIterating.value = false
+        _productsPlaced.value = 0
     }
 
     fun clearProduct() {
         _productBitmap.value = null
-        _productSource.value = ProductSource.None
+        _productLabel.value = "2. Product"
+    }
+
+    fun clearDetail() {
+        _detailBitmap.value = null
+        _detailLabel.value = "3. Detail"
     }
 
     fun setPrompt(newPrompt: String) {
@@ -110,29 +119,128 @@ class MainViewModel : ViewModel() {
 
     fun resetResult() {
         _uiState.value = UiState.Idle
+        _isIterating.value = false
+        _productsPlaced.value = 0
+        _prompt.value = ""
+        // Clear everything
+        _roomBitmap.value = null
+        originalRoomBitmap = null
+        _roomLabel.value = "1. Room Photo"
+        _productBitmap.value = null
+        _productLabel.value = "2. Product"
+        _detailBitmap.value = null
+        _detailLabel.value = "3. Detail"
     }
 
-    // ── URL Product Extraction ──────────────────────────────────────
+    // ── "Add Another Product" — uses generated scene as new room ────
 
-    fun extractProductFromUrl(url: String) {
-        viewModelScope.launch {
-            _urlProductState.value = UrlProductState.Loading("Starting extraction...")
+    fun addAnotherProduct(generatedScene: Bitmap) {
+        // The generated scene becomes the new "room"
+        _roomBitmap.value = generatedScene
+        _roomLabel.value = "1. Current Scene"
 
-            val result = urlExtractor.extractFromUrl(url) { step ->
-                _urlProductState.value = UrlProductState.Loading(step)
-            }
+        // Clear product slot and prompt for the next one
+        _productBitmap.value = null
+        _productLabel.value = "2. Next Product"
+        _prompt.value = ""
 
-            result.fold(
-                onSuccess = { (product, bitmap) ->
-                    _urlProductState.value = UrlProductState.Success(product, bitmap)
-                },
-                onFailure = { error ->
-                    _urlProductState.value = UrlProductState.Error(
-                        error.message ?: "Failed to extract product"
-                    )
-                }
-            )
+        // Keep detail if user wants
+        _isIterating.value = true
+        _uiState.value = UiState.Idle
+    }
+
+    fun startOver() {
+        _roomBitmap.value = originalRoomBitmap
+        _roomLabel.value = "1. Room Photo"
+        _productBitmap.value = null
+        _productLabel.value = "2. Product"
+        _detailBitmap.value = null
+        _detailLabel.value = "3. Detail"
+        _prompt.value = ""
+        _isIterating.value = false
+        _productsPlaced.value = 0
+        _uiState.value = UiState.Idle
+    }
+
+    // ── URL Import ──────────────────────────────────────────────────
+
+    fun openUrlSheet(slot: ImageSlot) {
+        _activeSlot.value = slot
+        _urlImportState.value = UrlImportState.Idle
+        _showUrlSheet.value = true
+    }
+
+    fun closeUrlSheet() {
+        _showUrlSheet.value = false
+        _urlImportState.value = UrlImportState.Idle
+    }
+
+    fun getSlotType(): ImportSlotType {
+        return when (_activeSlot.value) {
+            ImageSlot.ROOM -> ImportSlotType.ROOM
+            ImageSlot.PRODUCT -> ImportSlotType.PRODUCT
+            ImageSlot.DETAIL -> ImportSlotType.DETAIL
         }
+    }
+
+    fun extractFromUrl(url: String) {
+        val slot = _activeSlot.value
+        val isProductSlot = slot == ImageSlot.PRODUCT
+
+        viewModelScope.launch {
+            _urlImportState.value = UrlImportState.Loading("Starting...")
+
+            if (isProductSlot) {
+                val result = urlExtractor.extractProductFromUrl(url) { step ->
+                    _urlImportState.value = UrlImportState.Loading(step)
+                }
+                result.fold(
+                    onSuccess = { (product, bitmap) ->
+                        _urlImportState.value = UrlImportState.ProductResult(product, bitmap)
+                    },
+                    onFailure = { error ->
+                        _urlImportState.value = UrlImportState.Error(
+                            error.message ?: "Failed to extract product"
+                        )
+                    }
+                )
+            } else {
+                val result = urlExtractor.extractImageFromUrl(url) { step ->
+                    _urlImportState.value = UrlImportState.Loading(step)
+                }
+                result.fold(
+                    onSuccess = { (title, bitmap) ->
+                        _urlImportState.value = UrlImportState.ImageResult(title, bitmap)
+                    },
+                    onFailure = { error ->
+                        _urlImportState.value = UrlImportState.Error(
+                            error.message ?: "Failed to extract image"
+                        )
+                    }
+                )
+            }
+        }
+    }
+
+    fun useImportedImage(bitmap: Bitmap, name: String) {
+        when (_activeSlot.value) {
+            ImageSlot.ROOM -> {
+                _roomBitmap.value = bitmap
+                originalRoomBitmap = bitmap
+                _roomLabel.value = if (name.isNotBlank()) "1. $name" else "1. Room Photo"
+                _isIterating.value = false
+                _productsPlaced.value = 0
+            }
+            ImageSlot.PRODUCT -> {
+                _productBitmap.value = bitmap
+                _productLabel.value = if (name.isNotBlank()) "2. $name" else "2. Product"
+            }
+            ImageSlot.DETAIL -> {
+                _detailBitmap.value = bitmap
+                _detailLabel.value = if (name.isNotBlank()) "3. $name" else "3. Detail"
+            }
+        }
+        closeUrlSheet()
     }
 
     // ── Scene Generation ────────────────────────────────────────────
@@ -141,11 +249,14 @@ class MainViewModel : ViewModel() {
         val room    = _roomBitmap.value
         val product = _productBitmap.value
 
-        if (room == null || product == null) {
-            _uiState.value = UiState.Error("Please select both a room and a product image.")
+        if (room == null) {
+            _uiState.value = UiState.Error("Please select a room image.")
             return
         }
-
+        if (product == null) {
+            _uiState.value = UiState.Error("Please select a product image.")
+            return
+        }
         if (BuildConfig.GEMINI_API_KEY.isBlank()) {
             _uiState.value = UiState.Error("No API key found. Add GEMINI_API_KEY to local.properties and rebuild.")
             return
@@ -161,6 +272,7 @@ class MainViewModel : ViewModel() {
                     prompt        = _prompt.value,
                     onStepUpdate  = { step -> _uiState.value = UiState.Loading(step) }
                 )
+                _productsPlaced.value += 1
                 _uiState.value = UiState.Success(result)
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(e.message ?: "An unknown error occurred.")
@@ -175,15 +287,4 @@ class MainViewModel : ViewModel() {
             }
         } catch (e: Exception) { null }
     }
-}
-
-/**
- * Tracks where the product image came from so the UI
- * can show the appropriate label and clear behavior.
- */
-sealed class ProductSource {
-    object None : ProductSource()
-    object Camera : ProductSource()
-    data class Catalog(val productName: String) : ProductSource()
-    data class Url(val productName: String) : ProductSource()
 }

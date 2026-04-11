@@ -17,7 +17,6 @@ import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
 class GeminiService(private val apiKey: String) {
-    //
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
@@ -32,6 +31,11 @@ class GeminiService(private val apiKey: String) {
 
     private val baseUrl = "https://generativelanguage.googleapis.com/v1beta/models"
 
+    /**
+     * Full pipeline for a single product placement.
+     * For multi-product, call this multiple times — each time using
+     * the previous generated scene as the new "room".
+     */
     suspend fun generateScene(
         roomBitmap: Bitmap,
         productBitmap: Bitmap,
@@ -85,6 +89,50 @@ class GeminiService(private val apiKey: String) {
         )
     }
 
+    /**
+     * Quick generation pass — skips the critique step.
+     * Used for intermediate steps when chaining multiple products.
+     */
+    suspend fun generateSceneQuick(
+        roomBitmap: Bitmap,
+        productBitmap: Bitmap,
+        detailBitmap: Bitmap?,
+        prompt: String,
+        onStepUpdate: (String) -> Unit
+    ): Bitmap? = withContext(Dispatchers.IO) {
+
+        val roomB64    = bitmapToBase64(roomBitmap)
+        val productB64 = bitmapToBase64(productBitmap)
+        val detailB64  = detailBitmap?.let { bitmapToBase64(it) }
+
+        onStepUpdate("Analyzing room...")
+        val roomDescription = describeImage(
+            imageBase64  = roomB64,
+            systemPrompt = """You are an expert interior designer.
+                Describe this room in detail: the style, colors, lighting,
+                furniture, and any windows or surfaces visible.
+                Be concise (3-4 sentences)."""
+        )
+
+        onStepUpdate("Analyzing product...")
+        val productDescription = describeImage(
+            imageBase64  = productB64,
+            systemPrompt = """You are a product photographer.
+                Describe this product in detail: what it is, its shape,
+                color, material and finish. Be concise (2-3 sentences)."""
+        )
+
+        onStepUpdate("Generating scene...")
+        generateCompositeImage(
+            roomBase64    = roomB64,
+            productBase64 = productB64,
+            detailBase64  = detailB64,
+            roomDesc      = roomDescription,
+            productDesc   = productDescription,
+            userPrompt    = prompt
+        )
+    }
+
     private fun describeImage(imageBase64: String, systemPrompt: String): String {
         val request = GeminiRequest(
             contents = listOf(
@@ -114,12 +162,22 @@ class GeminiService(private val apiKey: String) {
             parts.add(Part(inlineData = InlineData("image/jpeg", detailBase64)))
         }
         parts.add(Part(text = """
-            You are an expert interior design visualizer.
+            You are an expert interior design visualizer with great spatial awareness.
             ROOM: $roomDesc
             PRODUCT: $productDesc
-            PLACEMENT INSTRUCTION: $userPrompt
+            USER'S PLACEMENT IDEA: $userPrompt
+            
+            Interpret the user's placement instruction naturally and use your 
+            interior design expertise to decide the best exact position:
+            - "next to the couch" = on the side of the couch, on the floor
+            - "on the wall" or "add texture to the wall" = cover the entire wall surface
+            - "by the window" = near or beside the window
+            - "in the corner" = in the most natural corner spot
+            - "on the table" = on top of the table surface
+            - Use common sense for any vague instructions
+            
             Generate a photorealistic image of the product placed naturally
-            in the room, following the placement instruction above.
+            in the room based on your interpretation.
             Make it look like a professional interior design photo.
             Preserve the room's lighting and perspective.
             The product should look like it truly belongs there.
@@ -146,14 +204,22 @@ class GeminiService(private val apiKey: String) {
                 Content(parts = listOf(
                     Part(inlineData = InlineData("image/jpeg", sceneBase64)),
                     Part(text = """
-                        You are a seasoned Design Director reviewing a product placement scene.
-                        Room: $roomDesc
-                        Product: $productDesc
+                        You are a seasoned Design Director reviewing an interior design scene.
+                        
+                        Context about the space: $roomDesc
+                        Product being evaluated: $productDesc
+                        
+                        Focus your critique PRIMARILY on the product that was just placed, 
+                        but also consider how it fits within the overall room composition.
+                        Evaluate the product's placement, scale, color harmony with the 
+                        existing space, and whether it complements the other furniture 
+                        and decor already in the room.
+                        
                         Provide your critique as a strict JSON object only, no markdown:
                         {
                           "score": <integer 0-100>,
                           "status": "<APPROVED | NEEDS_REVISION | REJECTED>",
-                          "critique_summary": "<2-3 sentence overall summary>",
+                          "critique_summary": "<2-3 sentence summary focusing on the placed product and how it works with the rest of the room>",
                           "detected_style": "<detected interior design style>",
                           "flaws": ["<flaw 1>", "<flaw 2>"],
                           "suggestion_for_improvement": "<one concrete suggestion>"
