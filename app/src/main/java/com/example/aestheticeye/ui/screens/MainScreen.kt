@@ -1,13 +1,11 @@
 package com.example.aestheticeye.ui.screens
 
-import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,48 +14,62 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.aestheticeye.data.UiState
-import com.example.aestheticeye.ui.components.ImageUploadCard
-import com.example.aestheticeye.ui.components.LoadingScreen
-import com.example.aestheticeye.ui.components.ResultDisplay
-import com.example.aestheticeye.ui.components.UrlImportSheet
+import com.example.aestheticeye.ui.components.*
 import com.example.aestheticeye.viewmodel.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: MainViewModel = viewModel()) {
+fun MainScreen(viewModel: MainViewModel) {
     val context = LocalContext.current
 
-    val roomBitmap    by viewModel.roomBitmap.collectAsStateWithLifecycle()
-    val productBitmap by viewModel.productBitmap.collectAsStateWithLifecycle()
-    val detailBitmap  by viewModel.detailBitmap.collectAsStateWithLifecycle()
+    val roomBitmap        by viewModel.roomBitmap.collectAsStateWithLifecycle()
+    val productBitmap     by viewModel.productBitmap.collectAsStateWithLifecycle()
+    val detailBitmap      by viewModel.detailBitmap.collectAsStateWithLifecycle()
+    val roomLabel         by viewModel.roomLabel.collectAsStateWithLifecycle()
+    val productLabel      by viewModel.productLabel.collectAsStateWithLifecycle()
+    val detailLabel       by viewModel.detailLabel.collectAsStateWithLifecycle()
+    val prompt            by viewModel.prompt.collectAsStateWithLifecycle()
+    val uiState           by viewModel.uiState.collectAsStateWithLifecycle()
+    val comparisonState   by viewModel.comparisonState.collectAsStateWithLifecycle()
+    val isIterating       by viewModel.isIterating.collectAsStateWithLifecycle()
+    val showUrlSheet      by viewModel.showUrlSheet.collectAsStateWithLifecycle()
+    val urlImportState    by viewModel.urlImportState.collectAsStateWithLifecycle()
+    val showFavorites     by viewModel.showFavorites.collectAsStateWithLifecycle()
+    val favorites         by viewModel.favorites.collectAsStateWithLifecycle()
+    val saveDialogVisible by viewModel.saveDialogVisible.collectAsStateWithLifecycle()
 
-    val roomLabel    by viewModel.roomLabel.collectAsStateWithLifecycle()
-    val productLabel by viewModel.productLabel.collectAsStateWithLifecycle()
-    val detailLabel  by viewModel.detailLabel.collectAsStateWithLifecycle()
+    // Favorites screen overlays everything
+    if (showFavorites) {
+        FavoritesScreen(
+            favorites = favorites,
+            onDelete  = { viewModel.deleteFavorite(it) },
+            onClose   = { viewModel.closeFavorites() }
+        )
+        return
+    }
 
-    val prompt         by viewModel.prompt.collectAsStateWithLifecycle()
-    val uiState        by viewModel.uiState.collectAsStateWithLifecycle()
-    val isIterating    by viewModel.isIterating.collectAsStateWithLifecycle()
-    val productsPlaced by viewModel.productsPlaced.collectAsStateWithLifecycle()
-    val showUrlSheet   by viewModel.showUrlSheet.collectAsStateWithLifecycle()
-    val urlImportState by viewModel.urlImportState.collectAsStateWithLifecycle()
+    var saveProjectName by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text  = "Aesthetic Eye",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Text(
-                            text  = "AI Interior Design Assistant",
+                        Text("Aesthetic Eye",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+                        Text("AI Interior Design Assistant",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.openFavorites() }) {
+                        BadgedBox(badge = {
+                            if (favorites.isNotEmpty()) Badge { Text("${favorites.size}") }
+                        }) {
+                            Icon(Icons.Default.FavoriteBorder, contentDescription = "My Collections")
+                        }
                     }
                 }
             )
@@ -74,7 +86,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
-            // ── INPUT CARD ──────────────────────────────────────────────
+            // ── INPUT CARD ────────────────────────────────────────────────────
             Card(
                 modifier  = Modifier.fillMaxWidth(),
                 shape     = RoundedCornerShape(16.dp),
@@ -84,27 +96,21 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 Column(modifier = Modifier.padding(16.dp)) {
 
                     Text(
-                        text  = if (isIterating) "Add Another Product" else "Create Your Scene",
+                        if (isIterating) "Add Another Product" else "Create Your Scene",
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                     )
-
                     Spacer(modifier = Modifier.height(4.dp))
-
                     Text(
-                        text = if (isIterating)
-                            "Pick your next product to add to the scene"
-                        else
-                            "Upload photos or paste URLs for each slot",
+                        if (isIterating) "Pick your next product to add to the scene"
+                        else "Upload photos or paste URLs for each slot",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // ── IMAGE SLOTS ──────────────────────────────────────
+                    // ── IMAGE SLOTS ───────────────────────────────────────────
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-
-                        // ROW 1: Room + Product
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -117,10 +123,9 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                                 onClear       = { viewModel.clearRoom() },
                                 onUrlImport   = if (!isIterating) {
                                     { viewModel.openUrlSheet(MainViewModel.ImageSlot.ROOM) }
-                                } else null,  // Don't allow changing room during iteration
+                                } else null,
                                 modifier      = Modifier.weight(1f)
                             )
-
                             ImageUploadCard(
                                 label         = productLabel,
                                 icon          = Icons.Default.Add,
@@ -132,7 +137,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                             )
                         }
 
-                        // ROW 2: Detail (full width)
                         if (!isIterating) {
                             ImageUploadCard(
                                 label         = detailLabel,
@@ -142,21 +146,19 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                                 onClear       = { viewModel.clearDetail() },
                                 onUrlImport   = { viewModel.openUrlSheet(MainViewModel.ImageSlot.DETAIL) },
                                 optional      = true,
-                                modifier      = Modifier
-                                    .fillMaxWidth(0.48f)
+                                modifier      = Modifier.fillMaxWidth(0.48f)
                             )
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // ── PLACEMENT INSTRUCTIONS ──────────────────────────
+                    // ── PLACEMENT INSTRUCTIONS ────────────────────────────────
                     Text(
                         if (isIterating) "Placement for this product" else "4. Placement Instructions",
                         style = MaterialTheme.typography.labelLarge
                     )
                     Spacer(modifier = Modifier.height(6.dp))
-
                     OutlinedTextField(
                         value         = prompt,
                         onValueChange = { viewModel.setPrompt(it) },
@@ -165,10 +167,8 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         maxLines      = 4,
                         placeholder   = {
                             Text(
-                                if (isIterating)
-                                    "e.g., Place the lamp on the side table next to the sofa."
-                                else
-                                    "e.g., Place the sofa against the main wall.",
+                                if (isIterating) "e.g., Place the lamp on the side table."
+                                else "e.g., Place the sofa against the main wall.",
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                             )
                         },
@@ -177,17 +177,15 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // ── GENERATE BUTTON ─────────────────────────────────
+                    // ── GENERATE BUTTON ───────────────────────────────────────
                     val isLoading   = uiState is UiState.Loading
                     val canGenerate = roomBitmap != null && productBitmap != null && !isLoading
 
                     Button(
                         onClick  = { viewModel.generateScene() },
                         enabled  = canGenerate,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        shape = RoundedCornerShape(12.dp)
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape    = RoundedCornerShape(12.dp)
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
@@ -199,14 +197,12 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                             Text("Generating...")
                         } else {
                             Text(
-                                if (isIterating) "Add Product to Scene"
-                                else "Generate Scene & Review",
+                                if (isIterating) "Add Product to Scene" else "Generate Scene & Review",
                                 style = MaterialTheme.typography.titleSmall
                             )
                         }
                     }
 
-                    // Start Over button during iteration
                     if (isIterating) {
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedButton(
@@ -214,11 +210,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                             modifier = Modifier.fillMaxWidth(),
                             shape    = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(
-                                Icons.Default.Refresh,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Start Over with Original Room")
                         }
@@ -235,11 +227,9 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 }
             }
 
-            // ── OUTPUT CARD ─────────────────────────────────────────────
+            // ── OUTPUT CARD ───────────────────────────────────────────────────
             Card(
-                modifier  = Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = 300.dp),
+                modifier  = Modifier.fillMaxWidth().defaultMinSize(minHeight = 300.dp),
                 shape     = RoundedCornerShape(16.dp),
                 colors    = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -251,80 +241,82 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         .padding(16.dp)
                 ) {
                     when (val state = uiState) {
+
                         is UiState.Idle -> {
-                            Column(
-                                modifier            = Modifier.align(Alignment.Center),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text  = if (isIterating)
-                                        "Pick your next product above"
-                                    else
-                                        "Your AI Feedback Awaits",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                )
-                            }
+                            Text(
+                                text  = if (isIterating) "Pick your next product above"
+                                else "Your AI Feedback Awaits",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.align(Alignment.Center)
+                            )
                         }
+
                         is UiState.Loading -> {
                             LoadingScreen(step = state.step, modifier = Modifier.fillMaxSize())
                         }
+
                         is UiState.Success -> {
                             Column(modifier = Modifier.fillMaxWidth()) {
-                                ResultDisplay(result = state.result)
 
-                                Spacer(modifier = Modifier.height(12.dp))
+                                ResultDisplay(
+                                    result              = state.result,
+                                    comparisonState     = comparisonState,
+                                    onRequestComparison = { viewModel.requestAiComparison() },
+                                    onDismissComparison = { viewModel.dismissComparison() }
+                                )
 
-                                // ── Add Another Product button ──────────
-                                state.result.generatedBitmap?.let { generatedBitmap ->
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                // Save to Collection
+                                state.result.generatedBitmap?.let { bitmap ->
+                                    OutlinedButton(
+                                        onClick  = { saveProjectName = ""; viewModel.openSaveDialog() },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape    = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Icon(Icons.Default.FavoriteBorder, contentDescription = null,
+                                            modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Save to Collection")
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    // Add Another Product
                                     Button(
-                                        onClick  = { viewModel.addAnotherProduct(generatedBitmap) },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(48.dp),
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = ButtonDefaults.buttonColors(
+                                        onClick  = { viewModel.addAnotherProduct(bitmap) },
+                                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                                        shape    = RoundedCornerShape(12.dp),
+                                        colors   = ButtonDefaults.buttonColors(
                                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                            contentColor   = MaterialTheme.colorScheme.onSecondaryContainer
                                         )
                                     ) {
-                                        Icon(
-                                            Icons.Default.Add,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
+                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            "Add Another Product to This Scene",
-                                            style = MaterialTheme.typography.labelLarge
-                                        )
+                                        Text("Add Another Product to This Scene",
+                                            style = MaterialTheme.typography.labelLarge)
                                     }
 
                                     Spacer(modifier = Modifier.height(8.dp))
                                 }
 
-                                // ── Done / Start Over ───────────────────
                                 TextButton(
                                     onClick  = { viewModel.resetResult() },
                                     modifier = Modifier.align(Alignment.CenterHorizontally)
-                                ) {
-                                    Text("Done — Start New Scene")
-                                }
+                                ) { Text("Done — Start New Scene") }
                             }
                         }
+
                         is UiState.Error -> {
                             Column(
                                 modifier            = Modifier.align(Alignment.Center),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(
-                                    text  = state.message,
-                                    color = MaterialTheme.colorScheme.error
-                                )
+                                Text(state.message, color = MaterialTheme.colorScheme.error)
                                 Spacer(modifier = Modifier.height(12.dp))
-                                OutlinedButton(onClick = { viewModel.resetResult() }) {
-                                    Text("Try Again")
-                                }
+                                OutlinedButton(onClick = { viewModel.resetResult() }) { Text("Try Again") }
                             }
                         }
                     }
@@ -333,7 +325,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         }
     }
 
-    // ── URL Import Bottom Sheet ─────────────────────────────────────
+    // ── URL Import Sheet ──────────────────────────────────────────────────────
     if (showUrlSheet) {
         UrlImportSheet(
             slotType   = viewModel.getSlotType(),
@@ -341,6 +333,44 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             onExtract  = { url -> viewModel.extractFromUrl(url) },
             onUseImage = { bitmap, name -> viewModel.useImportedImage(bitmap, name) },
             onDismiss  = { viewModel.closeUrlSheet() }
+        )
+    }
+
+    // ── Save to Collection Dialog ─────────────────────────────────────────────
+    if (saveDialogVisible) {
+        val successState = uiState as? UiState.Success
+        AlertDialog(
+            onDismissRequest = { viewModel.closeSaveDialog() },
+            title = { Text("Save to Collection") },
+            text  = {
+                Column {
+                    Text("Give this scene a name.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value         = saveProjectName,
+                        onValueChange = { saveProjectName = it },
+                        label         = { Text("Scene name") },
+                        placeholder   = { Text("e.g., Living Room Redesign") },
+                        singleLine    = true,
+                        modifier      = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick  = {
+                        successState?.result?.generatedBitmap?.let { bitmap ->
+                            viewModel.saveFavorite(context, saveProjectName, bitmap, successState.result)
+                        }
+                    },
+                    enabled = successState?.result?.generatedBitmap != null
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.closeSaveDialog() }) { Text("Cancel") }
+            }
         )
     }
 }
