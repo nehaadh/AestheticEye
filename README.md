@@ -4,6 +4,20 @@ Android app for AI-powered interior design visualization. Upload a room photo, a
 
 ---
 
+## Table of Contents
+
+- [Features](#features)
+- [How to Use](#how-to-use)
+- [Tech Stack](#tech-stack)
+- [AI Pipeline](#ai-pipeline)
+- [Project Structure](#project-structure)
+- [Setup](#setup)
+- [File Reference](#file-reference)
+- [Troubleshooting](#troubleshooting)
+- [Authors](#authors)
+
+---
+
 ## Features
 
 - Upload room photos and product images from camera, gallery, or any product URL
@@ -16,6 +30,79 @@ Android app for AI-powered interior design visualization. Upload a room photo, a
 - Iterative placement: each generated scene becomes the base for the next product
 - Mood board with 4 complementary product suggestions and Google Shopping links
 - Save scenes to a local collection with full stage history
+
+---
+
+## How to Use
+
+### Basic flow
+
+1. Open the app. You will see three image slots: **Room Photo**, **Product**, and **Detail (Optional)**.
+2. Tap a slot to pick an image from your camera or gallery, or tap **Paste URL** below any slot to import from a web link.
+3. Write a placement instruction in the text field, for example: `place lamp next to the sofa` or `add texture to the wall`. You can also leave it blank and the app will choose a placement.
+4. Tap **Generate & Review**.
+
+The app runs through several steps and shows them as they complete:
+- Room style card (detected style, colour palette, traits)
+- Size fit check (whether the product is proportionally appropriate)
+- Generated scene image
+- Design Director report (score, critique, issues, suggestion)
+- Mood board (4 complementary product picks)
+
+### Placement instructions
+
+Write naturally. The app interprets short or vague instructions using interior design context:
+
+| Instruction | Interpretation |
+|-------------|---------------|
+| `by the window` | Placed directly beside or flanking the window frame |
+| `next to the sofa` | On the floor beside the sofa |
+| `in the corner` | Most natural visible corner of the room |
+| `add texture to the wall` | Material applied across the entire main wall, floor to ceiling |
+| `against the back wall` | Pushed up against the back wall |
+
+### Importing from a URL
+
+Tap **Paste URL** under any image slot. Enter a product page URL from any retailer (IKEA, Amazon, Wayfair, Target, etc.). The app will:
+
+1. Fetch the page and extract the product name, description, price, dimensions, material, colour, and image
+2. Show a preview card with the extracted details
+3. Let you confirm before using it in the scene
+
+For room or texture slots, paste a direct image URL or a page that contains the image you want.
+
+### AI design improvement
+
+After the Design Director report loads, a **See AI's Improvement** button appears. Tap it to:
+
+1. Have the AI analyse your scene and identify what to change
+2. Generate an improved version of the scene
+3. See both versions side by side with a list of changes
+
+Each change is labelled as **ADDED**, **REPLACED**, or **REMOVED**. Added and replaced items include a Google Shopping link.
+
+You can choose to continue with your version or the AI's version for the next product stage.
+
+### Adding more products
+
+Tap **Add Another Product** at the bottom of the results screen. The current scene becomes the new room base. The product and detail slots clear. Add your next product and repeat the same flow.
+
+Each stage is recorded independently. When you save the scene, the full history is stored, including which scene you chose at each stage and any AI comparison that was run.
+
+### Saving to your collection
+
+Tap the heart icon in the top bar at any point after a scene is generated. Give the scene a name and tap Save. You can view saved scenes from the heart icon on the main screen.
+
+The detail view for each saved scene shows:
+- Final scene image with score overlay
+- Detected style, colour palette, traits
+- Products added (numbered list)
+- Design Director score, critique, and suggestions
+- Per-stage history: your scene and AI redesign side by side for each product addition, with a marker showing which one you continued with
+
+### Starting over
+
+Tap **Start New Scene** at the bottom of the results to reset everything and start from scratch.
 
 ---
 
@@ -108,11 +195,11 @@ https://developer.android.com/studio
 Replace `gradle/libs.versions.toml`, root `build.gradle.kts`, and `app/build.gradle.kts` with the provided files. Sync when prompted.
 
 ### 4. Add API key
-In `local.properties` (do not commit):
+In `local.properties` (do not commit this file):
 ```
 GEMINI_API_KEY=your_key_here
 ```
-Get a key at https://aistudio.google.com/apikey.
+Get a free key at https://aistudio.google.com/apikey.
 
 ### 5. Copy source files
 
