@@ -21,7 +21,7 @@ interface FavoritesDao {
     suspend fun getById(id: Int): FavoriteScene?
 }
 
-@Database(entities = [FavoriteScene::class], version = 2, exportSchema = false)
+@Database(entities = [FavoriteScene::class], version = 8, exportSchema = false)
 abstract class FavoritesDatabase : RoomDatabase() {
     abstract fun favoritesDao(): FavoritesDao
 
@@ -35,8 +35,6 @@ abstract class FavoritesDatabase : RoomDatabase() {
                     FavoritesDatabase::class.java,
                     "favorites_db"
                 )
-                    // Wipes and recreates the DB if schema changes —
-                    // safe to use here since this is a new feature with no existing user data.
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

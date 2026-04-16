@@ -9,17 +9,17 @@ import kotlinx.serialization.Serializable
 sealed class UiState {
     object Idle : UiState()
     data class Loading(val step: String = "Initializing...") : UiState()
+    // Scene image ready — analysis still loading in background
+    data class SceneReady(val result: AestheticResult, val analysisStep: String = "") : UiState()
     data class Success(val result: AestheticResult) : UiState()
     data class Error(val message: String) : UiState()
 }
 
-// ── Comparison state (separate from main UiState) ─────────────────────────────
-
-sealed class ComparisonState {
-    object Idle : ComparisonState()
-    data class Loading(val step: String = "Generating AI placement...") : ComparisonState()
-    data class Success(val comparison: AiComparisonResult) : ComparisonState()
-    data class Error(val message: String) : ComparisonState()
+sealed class ImprovementState {
+    object Idle : ImprovementState()
+    data class Loading(val step: String = "AI is redesigning your scene...") : ImprovementState()
+    data class Success(val improvement: AiImprovementResult) : ImprovementState()
+    data class Error(val message: String) : ImprovementState()
 }
 
 // ── Core Result ───────────────────────────────────────────────────────────────
@@ -31,24 +31,35 @@ data class AestheticResult(
     val roomStyleCard: RoomStyleCard? = null,
     val sizeWarning: SizeWarning? = null,
     val moodBoard: MoodBoard? = null,
-
-    // Stashed for on-demand AI comparison — not displayed directly
     val _roomB64: String? = null,
     val _productB64: String? = null,
     val _detailB64: String? = null,
     val _roomDesc: String? = null,
-    val _productDesc: String? = null
+    val _productDesc: String? = null,
+    val _productName: String? = null,         // short 2-3 word product name from Gemini
+    val _generatedSceneB64: String? = null   // user's generated scene, for comparison display
 )
 
-// ── Feature 1: AI Comparison ──────────────────────────────────────────────────
+// ── AI Comparison ─────────────────────────────────────────────────────────────
 
-data class AiComparisonResult(
-    val aiBitmap: Bitmap?,
-    val aiFeedback: DesignDirectorFeedback?,
-    val aiRationale: String = ""
+data class AiImprovementResult(
+    val improvedBitmap: Bitmap?,
+    val improvements: List<String>,           // bullet list of what was changed
+    val overallNote: String,                  // 1-2 sentence summary
+    val changedProducts: List<ChangedProduct> = emptyList()
 )
 
-// ── Feature 2: Room Style Card ────────────────────────────────────────────────
+enum class ChangeType { ADDED, REPLACED, REMOVED }
+
+data class ChangedProduct(
+    val type: ChangeType,
+    val name: String,                         // new product name (or removed product name)
+    val replacedName: String = "",            // original name if REPLACED
+    val reason: String,
+    val searchQuery: String = ""              // empty for REMOVED
+)
+
+// ── Room Style ────────────────────────────────────────────────────────────────
 
 data class RoomStyleCard(
     val styleName: String,
@@ -57,16 +68,15 @@ data class RoomStyleCard(
     val styleDescription: String
 )
 
-// ── Feature 3: Size Reality Check ────────────────────────────────────────────
+// ── Size Check ────────────────────────────────────────────────────────────────
 
 data class SizeWarning(
+    val label: String,          // "PERFECT FIT" | "TOO LARGE" | "TOO SMALL"
     val hasIssue: Boolean,
-    val severity: String,           // "NONE" | "MINOR" | "MAJOR"
-    val description: String,
-    val recommendation: String
+    val description: String
 )
 
-// ── Feature 4: Mood Board ─────────────────────────────────────────────────────
+// ── Mood Board ────────────────────────────────────────────────────────────────
 
 data class MoodBoard(
     val suggestions: List<ProductSuggestion>
@@ -81,7 +91,20 @@ data class ProductSuggestion(
     val searchQuery: String
 )
 
-// ── Favorites (Room DB) ───────────────────────────────────────────────────────
+// ── Scene Stages (stored as JSON in FavoriteScene.stagesJson) ────────────────
+
+@Serializable
+data class SceneStage(
+    val stageNumber: Int,
+    val productLabel: String,
+    val userScenePath: String = "",
+    val aiScenePath: String = "",
+    val userChose: Boolean = true,
+    val aiImprovements: List<String> = emptyList(),
+    val aiOverallNote: String = ""
+)
+
+// ── Favorites ─────────────────────────────────────────────────────────────────
 
 @androidx.room.Entity(tableName = "favorites")
 data class FavoriteScene(
@@ -89,10 +112,20 @@ data class FavoriteScene(
     val projectName: String,
     val createdAt: Long = System.currentTimeMillis(),
     val score: Int,
+    val status: String = "APPROVED",
     val detectedStyle: String,
     val critiqueSummary: String,
+    val flaws: String = "",                 // comma-separated
+    val suggestion: String = "",
     val imagePath: String,
-    val productsPlaced: Int = 1
+    val productsPlaced: Int = 1,
+    val productLabels: String = "",         // comma-separated product names/labels
+    val roomDescription: String = "",
+    val styleDescription: String = "",
+    val dominantColors: String = "",        // "hex1,hex2,hex3"
+    val keyTraits: String = "",             // comma-separated
+    val sizeNote: String = "",
+    val stagesJson: String = ""        // JSON array of SceneStage objects
 )
 
 // ── Design Director Feedback ──────────────────────────────────────────────────
@@ -130,16 +163,14 @@ data class Part(
 
 @Serializable
 data class InlineData(
-    @SerialName("mimeType")
-    val mimeType: String,
+    @SerialName("mimeType") val mimeType: String,
     val data: String
 )
 
 @Serializable
 data class GenerationConfig(
     val temperature: Float = 1f,
-    @SerialName("responseModalities")
-    val responseModalities: List<String>? = null
+    @SerialName("responseModalities") val responseModalities: List<String>? = null
 )
 
 @Serializable
@@ -149,13 +180,7 @@ data class GeminiResponse(
 )
 
 @Serializable
-data class Candidate(
-    val content: Content? = null
-)
+data class Candidate(val content: Content? = null)
 
 @Serializable
-data class GeminiError(
-    val code: Int,
-    val message: String,
-    val status: String
-)
+data class GeminiError(val code: Int, val message: String, val status: String)

@@ -10,10 +10,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.animation.*
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,130 +21,541 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.aestheticeye.data.*
-import com.example.aestheticeye.ui.theme.Green500
-import com.example.aestheticeye.ui.theme.Red500
-import com.example.aestheticeye.ui.theme.Yellow500
+import com.example.aestheticeye.network.buildRetailerUrls
+import com.example.aestheticeye.ui.theme.AeGold
+import com.example.aestheticeye.ui.theme.AeGreen
+import com.example.aestheticeye.ui.theme.AeRed
+import com.example.aestheticeye.ui.theme.AeAmber
 import java.io.OutputStream
 import java.net.URLEncoder
 
 @Composable
 fun ResultDisplay(
     result: AestheticResult,
-    comparisonState: ComparisonState,
-    onRequestComparison: () -> Unit,
-    onDismissComparison: () -> Unit,
+    improvementState: ImprovementState,
+    onRequestImprovement: () -> Unit,
+    onDismissImprovement: () -> Unit,
+    // Called when user picks a scene to continue with (user or AI bitmap)
+    onContinueWithScene: (Bitmap) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
 
     Column(modifier = modifier.fillMaxWidth()) {
 
-        // ── Feature 2: Room Style Card ────────────────────────────────────────
-        result.roomStyleCard?.let { RoomStyleCardSection(styleCard = it) }
-        if (result.roomStyleCard != null) Spacer(modifier = Modifier.height(16.dp))
+        // ── Style Card ────────────────────────────────────────────────────────
+        result.roomStyleCard?.let { RoomStyleCardSection(it) }
+        if (result.roomStyleCard != null) Spacer(Modifier.height(12.dp))
 
-        // ── Feature 3: Size Warning ───────────────────────────────────────────
-        result.sizeWarning?.let { warning ->
-            if (warning.hasIssue && warning.severity != "NONE") {
-                SizeWarningBanner(warning = warning)
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-        }
+        // ── Size Badge ────────────────────────────────────────────────────────
+        result.sizeWarning?.let { SizeBadge(it) }
+        if (result.sizeWarning != null) Spacer(Modifier.height(12.dp))
 
-        // ── Your Generated Scene ──────────────────────────────────────────────
-        Text(
-            text  = "Generated Scene",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        SceneImageCard(bitmap = result.generatedBitmap, label = "Your Scene", context = context)
+        // ── Scene Image ───────────────────────────────────────────────────────
+        SectionLabel("Generated Scene")
+        Spacer(Modifier.height(8.dp))
+        SceneImageCard(bitmap = result.generatedBitmap, label = "Your scene", context = context)
 
         // ── Director Critique ─────────────────────────────────────────────────
         result.directorFeedback?.let { feedback ->
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
             DirectorCritiqueCard(feedback = feedback)
         }
 
-        // ── Feature 1: On-Demand AI Comparison ───────────────────────────────
-        Spacer(modifier = Modifier.height(16.dp))
-        AiComparisonSection(
-            userResult          = result,
-            comparisonState     = comparisonState,
-            onRequestComparison = onRequestComparison,
-            onDismiss           = onDismissComparison,
-            context             = context
-        )
+        // ── AI Improvement — only shown once design report is fully loaded ─────
+        if (result.directorFeedback != null) {
+            Spacer(Modifier.height(16.dp))
+            AiImprovementSection(
+                userResult           = result,
+                improvementState     = improvementState,
+                onRequestImprovement = onRequestImprovement,
+                onDismiss            = onDismissImprovement,
+                onContinueWithScene  = onContinueWithScene,
+                context              = context
+            )
+        }
 
-        // ── Feature 4: Mood Board ─────────────────────────────────────────────
+        // ── Mood Board ────────────────────────────────────────────────────────
         result.moodBoard?.let { moodBoard ->
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
             MoodBoardSection(moodBoard = moodBoard)
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(Modifier.height(8.dp))
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FEATURE 1: ON-DEMAND AI COMPARISON
+// SECTION LABEL
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun AiComparisonSection(
+private fun SectionLabel(text: String) {
+    Text(
+        text  = text.uppercase(),
+        style = MaterialTheme.typography.labelSmall.copy(
+            letterSpacing = 2.sp,
+            fontWeight    = FontWeight.SemiBold
+        ),
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FEATURE 2: ROOM STYLE CARD — clean horizontal layout
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun RoomStyleCardSection(styleCard: RoomStyleCard) {
+    var expanded by remember { mutableStateOf(true) }
+
+    Surface(
+        color  = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        shape  = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            // Header row
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Style name + description
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "ROOM STYLE",
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        styleCard.styleName,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                // Color swatches (always visible)
+                if (styleCard.dominantColors.isNotEmpty()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        styleCard.dominantColors.take(3).forEach { hex ->
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(parseHexColor(hex))
+                                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), CircleShape)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
+                Icon(
+                    if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                Column {
+                    Spacer(Modifier.height(12.dp))
+
+                    // Style description
+                    if (styleCard.styleDescription.isNotBlank()) {
+                        Text(
+                            styleCard.styleDescription,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
+
+                    // Traits as a flowing wrap row
+                    if (styleCard.keyTraits.isNotEmpty()) {
+                        Text(
+                            "KEY TRAITS",
+                            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        // Use a column of rows to wrap traits naturally
+                        val rows = styleCard.keyTraits.chunked(2)
+                        rows.forEach { rowTraits ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                rowTraits.forEach { trait ->
+                                    Surface(
+                                        color  = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                                        shape  = RoundedCornerShape(6.dp),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(
+                                            trait,
+                                            style    = MaterialTheme.typography.labelSmall,
+                                            color    = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                                // Fill empty slot if odd number
+                                if (rowTraits.size == 1) Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
+
+                    // Colour hex labels
+                    if (styleCard.dominantColors.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            styleCard.dominantColors.take(3).forEach { hex ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(12.dp)
+                                            .clip(CircleShape)
+                                            .background(parseHexColor(hex))
+                                    )
+                                    Text(
+                                        hex.uppercase(),
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FEATURE 3: SIZE BADGE — simple inline label
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun SizeBadge(warning: SizeWarning) {
+    val (bgColor, textColor, icon) = when (warning.label) {
+        "TOO LARGE" -> Triple(AeRed.copy(alpha = 0.1f), AeRed, Icons.Default.Warning)
+        "TOO SMALL" -> Triple(AeAmber.copy(alpha = 0.1f), AeAmber, Icons.Default.Info)
+        else        -> Triple(AeGreen.copy(alpha = 0.1f), AeGreen, Icons.Default.Check)
+    }
+
+    Surface(
+        color  = bgColor,
+        shape  = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, textColor.copy(alpha = 0.2f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = textColor, modifier = Modifier.size(16.dp))
+            Text(
+                warning.label,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = textColor
+            )
+            Text(
+                warning.description,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCENE IMAGE CARD
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun SceneImageCard(bitmap: Bitmap?, label: String, context: Context, compact: Boolean = false) {
+    if (bitmap != null) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Image(
+                bitmap             = bitmap.asImageBitmap(),
+                contentDescription = label,
+                contentScale       = ContentScale.Fit,
+                modifier           = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+            )
+            // Save button overlay
+            Surface(
+                color    = Color.Black.copy(alpha = 0.55f),
+                shape    = RoundedCornerShape(bottomEnd = 16.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .clickable {
+                        saveImageToGallery(bitmap, context)
+                        Toast.makeText(context, "Saved to Gallery", Toast.LENGTH_SHORT).show()
+                    }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(Icons.Default.Download, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                    Text("Save", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                }
+            }
+        }
+    } else {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(260.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.Image, null,
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                    modifier = Modifier.size(32.dp))
+                Spacer(Modifier.height(6.dp))
+                Text("Image generation failed — try again",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    textAlign = TextAlign.Center)
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DIRECTOR CRITIQUE CARD
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun DirectorCritiqueCard(
+    feedback: DesignDirectorFeedback,
+    title: String = "Design Director",
+    accentColor: Color = MaterialTheme.colorScheme.primary
+) {
+    val statusColor = when (feedback.status) {
+        "APPROVED"       -> AeGreen
+        "NEEDS_REVISION" -> AeAmber
+        else             -> AeRed
+    }
+
+    Surface(
+        color  = MaterialTheme.colorScheme.surface,
+        shape  = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = accentColor.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Icon(Icons.Default.Star, null,
+                        tint = accentColor,
+                        modifier = Modifier.padding(6.dp).size(16.dp))
+                }
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(title.uppercase(),
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f))
+                    Text("Design Report",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+                }
+                Spacer(Modifier.weight(1f))
+                // Score pill
+                Surface(
+                    color = statusColor.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(20.dp),
+                    border = BorderStroke(1.dp, statusColor.copy(alpha = 0.3f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text("${feedback.score}",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                            color = statusColor)
+                        Text("/100",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = statusColor.copy(alpha = 0.7f))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+            Spacer(Modifier.height(12.dp))
+
+            // Status badge + style
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    color = statusColor.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        feedback.status.replace("_", " "),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = statusColor,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+                if (feedback.detectedStyle.isNotBlank()) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            feedback.detectedStyle,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            Text(feedback.critiqueSummary,
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
+
+            if (feedback.flaws.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Text("ISSUES",
+                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                Spacer(Modifier.height(4.dp))
+                feedback.flaws.forEach { flaw ->
+                    Row(
+                        modifier = Modifier.padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 5.dp)
+                                .size(5.dp)
+                                .clip(CircleShape)
+                                .background(AeRed.copy(alpha = 0.7f))
+                        )
+                        Text(flaw,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    }
+                }
+            }
+
+            if (feedback.suggestionForImprovement.isNotBlank()) {
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    color  = accentColor.copy(alpha = 0.07f),
+                    shape  = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, accentColor.copy(alpha = 0.15f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(Icons.Default.Lightbulb, null,
+                            tint = accentColor, modifier = Modifier.size(15.dp).padding(top = 1.dp))
+                        Text(feedback.suggestionForImprovement,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FEATURE 1: AI COMPARISON SECTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun AiImprovementSection(
     userResult: AestheticResult,
-    comparisonState: ComparisonState,
-    onRequestComparison: () -> Unit,
+    improvementState: ImprovementState,
+    onRequestImprovement: () -> Unit,
     onDismiss: () -> Unit,
+    onContinueWithScene: (Bitmap) -> Unit,
     context: Context
 ) {
-    when (comparisonState) {
+    when (improvementState) {
 
-        is ComparisonState.Idle -> {
-            // Show the prompt button
+        is ImprovementState.Idle -> {
             OutlinedButton(
-                onClick  = onRequestComparison,
+                onClick  = onRequestImprovement,
                 modifier = Modifier.fillMaxWidth(),
-                shape    = RoundedCornerShape(12.dp)
+                shape    = RoundedCornerShape(10.dp),
+                border   = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
             ) {
-                Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Compare with AI's Placement")
+                Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("See AI's Improvement", style = MaterialTheme.typography.labelLarge)
             }
         }
 
-        is ComparisonState.Loading -> {
+        is ImprovementState.Loading -> {
             Surface(
-                color  = MaterialTheme.colorScheme.surfaceVariant,
-                shape  = RoundedCornerShape(12.dp),
+                color    = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                shape    = RoundedCornerShape(10.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    AeDots(color = MaterialTheme.colorScheme.primary)
                     Text(
-                        comparisonState.step,
+                        improvementState.step,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
                 }
             }
         }
 
-        is ComparisonState.Error -> {
+        is ImprovementState.Error -> {
             Surface(
-                color    = MaterialTheme.colorScheme.errorContainer,
-                shape    = RoundedCornerShape(12.dp),
+                color    = AeRed.copy(alpha = 0.08f),
+                shape    = RoundedCornerShape(10.dp),
+                border   = BorderStroke(1.dp, AeRed.copy(alpha = 0.2f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -156,23 +564,25 @@ private fun AiComparisonSection(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        "Comparison failed: ${comparisonState.message}",
+                        "Could not generate improvement: ${improvementState.message}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        color = AeRed,
                         modifier = Modifier.weight(1f)
                     )
-                    TextButton(onClick = onDismiss) { Text("Dismiss") }
+                    TextButton(onClick = onDismiss) {
+                        Text("Dismiss", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
         }
 
-        is ComparisonState.Success -> {
-            val comparison = comparisonState.comparison
-            Card(
-                modifier  = Modifier.fillMaxWidth(),
-                shape     = RoundedCornerShape(12.dp),
-                colors    = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        is ImprovementState.Success -> {
+            val improvement = improvementState.improvement
+            Surface(
+                color  = MaterialTheme.colorScheme.surface,
+                shape  = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
 
@@ -182,289 +592,272 @@ private fun AiComparisonSection(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            "You vs. AI",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                        IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                            Icon(Icons.Default.Close, contentDescription = "Dismiss", modifier = Modifier.size(18.dp))
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Side-by-side images
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Your placement
-                        Column(modifier = Modifier.weight(1f)) {
-                            ComparisonLabel(
-                                label  = "Your Placement",
-                                score  = userResult.directorFeedback?.score,
-                                isUser = true
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            CompactSceneImage(bitmap = userResult.generatedBitmap, label = "Your scene", context = context)
-                        }
-
-                        // AI placement
-                        Column(modifier = Modifier.weight(1f)) {
-                            ComparisonLabel(
-                                label  = "AI's Placement",
-                                score  = comparison.aiFeedback?.score,
-                                isUser = false
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            CompactSceneImage(bitmap = comparison.aiBitmap, label = "AI scene", context = context)
-                        }
-                    }
-
-                    // AI rationale
-                    if (comparison.aiRationale.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Surface(
-                            color = MaterialTheme.colorScheme.tertiaryContainer,
-                            shape = RoundedCornerShape(8.dp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
-                                Text(
-                                    "🤖 AI's Reasoning",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    comparison.aiRationale,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer
-                                )
+                            Surface(
+                                color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Icon(Icons.Default.AutoAwesome, null,
+                                    tint = MaterialTheme.colorScheme.tertiary,
+                                    modifier = Modifier.padding(6.dp).size(16.dp))
                             }
+                            Column {
+                                Text("AI REDESIGN",
+                                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                                Text("What the AI improved",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+                            }
+                        }
+                        IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         }
                     }
 
-                    // AI director report
-                    comparison.aiFeedback?.let { aiFeedback ->
-                        Spacer(modifier = Modifier.height(12.dp))
-                        DirectorCritiqueCard(
-                            feedback    = aiFeedback,
-                            title       = "AI Placement — Director's Report",
-                            accentColor = MaterialTheme.colorScheme.tertiary
+                    // ── Your scene first ─────────────────────────────────
+                    Spacer(Modifier.height(10.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Your Scene",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text("Score: ${userResult.directorFeedback?.score ?: "—"}/100",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    val yourBitmapTop = userResult.generatedBitmap
+                        ?: userResult._generatedSceneB64?.let { b64 ->
+                            try {
+                                val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            } catch (e: Exception) { null }
+                        }
+                    SceneImageCard(bitmap = yourBitmapTop, label = "Your scene", context = context)
+                    Spacer(Modifier.height(8.dp))
+                    yourBitmapTop?.let { bmp ->
+                        OutlinedButton(
+                            onClick  = { onContinueWithScene(bmp) },
+                            modifier = Modifier.fillMaxWidth().height(42.dp),
+                            shape    = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Keep Mine", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+                    Spacer(Modifier.height(12.dp))
+
+                    // ── AI redesign scene ─────────────────────────────────────
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("AI Redesign",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onTertiaryContainer)
+                            Text("Improved version",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer)
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    SceneImageCard(bitmap = improvement.improvedBitmap, label = "AI improved scene", context = context)
+                    Spacer(Modifier.height(8.dp))
+                    improvement.improvedBitmap?.let { bmp ->
+                        Button(
+                            onClick  = { onContinueWithScene(bmp) },
+                            modifier = Modifier.fillMaxWidth().height(42.dp),
+                            shape    = RoundedCornerShape(10.dp),
+                            colors   = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiary,
+                                contentColor   = MaterialTheme.colorScheme.onTertiary
+                            )
+                        ) {
+                            Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Use AI's Version", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                    Spacer(Modifier.height(14.dp))
+
+                    // ── What the AI changed ───────────────────────────────────
+                    // Overall note
+                    if (improvement.overallNote.isNotBlank()) {
+                        Text(
+                            improvement.overallNote,
+                            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
+                        Spacer(Modifier.height(10.dp))
                     }
-                }
-            }
-        }
-    }
-}
 
-@Composable
-private fun ComparisonLabel(label: String, score: Int?, isUser: Boolean) {
-    val bg = if (isUser) MaterialTheme.colorScheme.primaryContainer
-    else MaterialTheme.colorScheme.tertiaryContainer
-    val fg = if (isUser) MaterialTheme.colorScheme.onPrimaryContainer
-    else MaterialTheme.colorScheme.onTertiaryContainer
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(bg)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = fg)
-        if (score != null) {
-            Text("$score", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = fg)
-        }
-    }
-}
-
-@Composable
-private fun CompactSceneImage(bitmap: Bitmap?, label: String, context: Context) {
-    if (bitmap != null) {
-        Column {
-            Image(
-                bitmap             = bitmap.asImageBitmap(),
-                contentDescription = label,
-                contentScale       = ContentScale.Crop,
-                modifier           = Modifier
-                    .fillMaxWidth()
-                    .height(160.dp)
-                    .clip(RoundedCornerShape(10.dp))
-            )
-            TextButton(
-                onClick  = {
-                    saveImageToGallery(bitmap, context)
-                    Toast.makeText(context, "Saved!", Toast.LENGTH_SHORT).show()
-                },
-                modifier = Modifier.align(Alignment.End)
-            ) {
-                Text("⬇ Save", style = MaterialTheme.typography.labelSmall)
-            }
-        }
-    } else {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("Unavailable", style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FEATURE 2: ROOM STYLE CARD
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun RoomStyleCardSection(styleCard: RoomStyleCard) {
-    var expanded by remember { mutableStateOf(true) }
-
-    Card(
-        modifier  = Modifier.fillMaxWidth(),
-        shape     = RoundedCornerShape(12.dp),
-        colors    = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Home, contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text("Room Style Detected",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
-                        Text(styleCard.styleName,
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    // Bullet improvements
+                    if (improvement.improvements.isNotEmpty()) {
+                        Text("CHANGES MADE",
+                            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                        Spacer(Modifier.height(6.dp))
+                        improvement.improvements.forEach { point ->
+                            Row(
+                                modifier = Modifier.padding(vertical = 3.dp),
+                                verticalAlignment = Alignment.Top,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(top = 5.dp)
+                                        .size(5.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.7f))
+                                )
+                                Text(point,
+                                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 17.sp),
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
+                            }
+                        }
                     }
-                }
-                Icon(
-                    if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            }
 
-            AnimatedVisibility(visible = expanded) {
-                Column {
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    if (styleCard.dominantColors.isNotEmpty()) {
-                        Text("Dominant Colors", style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            styleCard.dominantColors.forEach { hex ->
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(CircleShape)
-                                            .background(parseHexColor(hex))
-                                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), CircleShape)
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(hex, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f))
+                    // Changed products section — added, replaced, or removed
+                    if (improvement.changedProducts.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Text("PRODUCT CHANGES",
+                            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                        Spacer(Modifier.height(8.dp))
+                        improvement.changedProducts.forEach { product ->
+                            val (bgColor, tagLabel, tagColor) = when (product.type) {
+                                ChangeType.ADDED    -> Triple(
+                                    MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f),
+                                    "ADDED",
+                                    MaterialTheme.colorScheme.tertiary
+                                )
+                                ChangeType.REPLACED -> Triple(
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                                    "REPLACED",
+                                    MaterialTheme.colorScheme.primary
+                                )
+                                ChangeType.REMOVED  -> Triple(
+                                    AeRed.copy(alpha = 0.06f),
+                                    "REMOVED",
+                                    AeRed
+                                )
+                            }
+                            Surface(
+                                color    = bgColor,
+                                shape    = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        // Type tag
+                                        Surface(
+                                            color = tagColor.copy(alpha = 0.12f),
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(tagLabel,
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    letterSpacing = 0.5.sp
+                                                ),
+                                                color = tagColor,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                        }
+                                        Spacer(Modifier.height(4.dp))
+                                        // For REPLACED: show "Old → New"
+                                        if (product.type == ChangeType.REPLACED && product.replacedName.isNotBlank()) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(product.replacedName,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                                                    maxLines = 1)
+                                                Icon(Icons.Default.ArrowForward, null,
+                                                    modifier = Modifier.size(12.dp),
+                                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                                                Text(product.name,
+                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    maxLines = 1)
+                                            }
+                                        } else {
+                                            Text(product.name,
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                color = MaterialTheme.colorScheme.onSurface)
+                                        }
+                                        if (product.reason.isNotBlank()) {
+                                            Spacer(Modifier.height(2.dp))
+                                            Text(product.reason,
+                                                style = MaterialTheme.typography.labelSmall.copy(lineHeight = 15.sp),
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                                        }
+                                    }
+                                    // Shop button for added/replaced, nothing for removed
+                                    if (product.type != ChangeType.REMOVED && product.searchQuery.isNotBlank()) {
+                                        Spacer(Modifier.width(8.dp))
+                                        val shopUrl = "https://www.google.com/search?tbm=shop&q=" +
+                                                java.net.URLEncoder.encode(product.searchQuery, "UTF-8")
+                                        IconButton(
+                                            onClick  = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(shopUrl))) },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(Icons.Default.Search, "Shop",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp))
+                                        }
+                                    }
                                 }
                             }
                         }
-                        Spacer(modifier = Modifier.height(10.dp))
                     }
 
-                    if (styleCard.keyTraits.isNotEmpty()) {
-                        Text("Key Traits", style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                            styleCard.keyTraits.take(4).forEach { trait ->
-                                Surface(color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f),
-                                    shape = RoundedCornerShape(6.dp)) {
-                                    Text(trait, style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
-                    }
 
-                    if (styleCard.styleDescription.isNotBlank()) {
-                        Text(styleCard.styleDescription,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f))
-                    }
                 }
             }
         }
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FEATURE 3: SIZE WARNING
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun SizeWarningBanner(warning: SizeWarning) {
-    val isMajor   = warning.severity == "MAJOR"
-    val bgColor   = if (isMajor) Red500.copy(alpha = 0.1f) else Yellow500.copy(alpha = 0.1f)
-    val iconColor = if (isMajor) Red500 else Yellow500
-
-    Surface(color = bgColor, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
-            Icon(if (isMajor) Icons.Default.Warning else Icons.Default.Info,
-                contentDescription = null, tint = iconColor, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(10.dp))
-            Column {
-                Text(if (isMajor) "⚠ Size Mismatch Detected" else "ℹ Proportions Note",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = iconColor)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(warning.description, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface)
-                if (warning.recommendation.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("💡 ${warning.recommendation}",
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
-                }
-            }
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FEATURE 4: MOOD BOARD with Google Shopping links
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun MoodBoardSection(moodBoard: MoodBoard) {
+fun MoodBoardSection(moodBoard: MoodBoard) {
     var expanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
-    Card(
-        modifier  = Modifier.fillMaxWidth(),
-        shape     = RoundedCornerShape(12.dp),
-        colors    = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    Surface(
+        color  = MaterialTheme.colorScheme.surface,
+        shape  = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -472,41 +865,61 @@ private fun MoodBoardSection(moodBoard: MoodBoard) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Star, contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        color = AeGold.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Icon(Icons.Default.AutoAwesome, null,
+                            tint = AeGold,
+                            modifier = Modifier.padding(6.dp).size(16.dp))
+                    }
                     Column {
-                        Text("Mood Board", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                        Text("Tap any item to shop on Google",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        Text("MOOD BOARD",
+                            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                        Text("Curated Product Picks",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
                     }
                 }
-                Icon(
-                    if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = null
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("${moodBoard.suggestions.size} items",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                    }
+                    Icon(
+                        if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        null, modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                    )
+                }
             }
 
             AnimatedVisibility(visible = expanded) {
                 Column {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(Modifier.height(14.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
                     moodBoard.suggestions.forEachIndexed { index, suggestion ->
                         MoodBoardItem(
                             suggestion = suggestion,
-                            onShopClick = {
-                                val query   = URLEncoder.encode(suggestion.searchQuery, "UTF-8")
-                                val shopUrl = "https://www.google.com/search?tbm=shop&q=$query"
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(shopUrl)))
-                            }
+                            context    = context
                         )
                         if (index < moodBoard.suggestions.lastIndex) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                            Spacer(modifier = Modifier.height(8.dp))
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.06f),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
                         }
                     }
                 }
@@ -516,215 +929,85 @@ private fun MoodBoardSection(moodBoard: MoodBoard) {
 }
 
 @Composable
-private fun MoodBoardItem(
-    suggestion: ProductSuggestion,
-    onShopClick: () -> Unit
-) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Surface(
-            color  = MaterialTheme.colorScheme.primaryContainer,
-            shape  = RoundedCornerShape(8.dp),
-            modifier = Modifier
-                .width(52.dp)
-                .defaultMinSize(minHeight = 44.dp)
+private fun MoodBoardItem(suggestion: ProductSuggestion, context: Context) {
+    val (ikeaUrl, amazonUrl, wayfairUrl) = buildRetailerUrls(suggestion.searchQuery)
+
+    Column(modifier = Modifier.padding(vertical = 12.dp)) {
+        // Name + price + category
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.padding(4.dp)
-            ) {
-                Text(
-                    suggestion.category.take(8).uppercase(),
-                    style  = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize   = 7.sp,
-                        letterSpacing = 0.5.sp
-                    ),
-                    color  = MaterialTheme.colorScheme.onPrimaryContainer,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    maxLines = 2
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(suggestion.name,
-                    style    = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    modifier = Modifier.weight(1f))
-                if (suggestion.priceRange.isNotBlank()) {
-                    Text(suggestion.priceRange,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = Green500,
-                        modifier = Modifier.padding(start = 8.dp))
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+                Spacer(Modifier.height(2.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(suggestion.category,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
+                    }
                 }
             }
-
-            Text(suggestion.category,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary)
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            Text(suggestion.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(6.dp)
-            ) {
-                Text("✓ ${suggestion.rationale}",
-                    style    = MaterialTheme.typography.labelSmall,
-                    color    = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Google Shopping button
-            OutlinedButton(
-                onClick  = onShopClick,
-                modifier = Modifier.height(32.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(14.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Shop on Google", style = MaterialTheme.typography.labelSmall)
+            if (suggestion.priceRange.isNotBlank()) {
+                Text(suggestion.priceRange,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = AeGreen)
             }
         }
-    }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SHARED: SCENE IMAGE CARD
-// ─────────────────────────────────────────────────────────────────────────────
+        Spacer(Modifier.height(5.dp))
+        Text(suggestion.description,
+            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 17.sp),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
 
-@Composable
-private fun SceneImageCard(bitmap: Bitmap?, label: String, context: Context) {
-    if (bitmap != null) {
-        Column {
-            Image(
-                bitmap             = bitmap.asImageBitmap(),
-                contentDescription = label,
-                contentScale       = ContentScale.Fit,
-                modifier           = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(
-                onClick  = {
-                    saveImageToGallery(bitmap, context)
-                    Toast.makeText(context, "Saved to Gallery!", Toast.LENGTH_SHORT).show()
-                },
-                modifier = Modifier.align(Alignment.End)
-            ) { Text("⬇ Save to Gallery") }
-        }
-    } else {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth().height(200.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center
+        Spacer(Modifier.height(4.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Image generation unavailable",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+            Box(modifier = Modifier.size(4.dp).clip(CircleShape).background(AeGreen.copy(alpha = 0.6f)))
+            Text(suggestion.rationale,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        val googleShoppingUrl = "https://www.google.com/search?tbm=shop&q=" + java.net.URLEncoder.encode(suggestion.searchQuery, "UTF-8")
+        OutlinedButton(
+            onClick  = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(googleShoppingUrl))) },
+            modifier = Modifier.fillMaxWidth().height(34.dp),
+            shape    = RoundedCornerShape(8.dp),
+            border   = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+            contentPadding = PaddingValues(horizontal = 10.dp)
+        ) {
+            Icon(Icons.Default.Search, null, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Shop on Google", style = MaterialTheme.typography.labelSmall)
         }
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SHARED: DIRECTOR CRITIQUE CARD
-// ─────────────────────────────────────────────────────────────────────────────
-
 @Composable
-fun DirectorCritiqueCard(
-    feedback: DesignDirectorFeedback,
-    title: String = "Design Director's Report",
-    accentColor: Color = MaterialTheme.colorScheme.primary
-) {
-    val statusColor = when (feedback.status) {
-        "APPROVED"       -> Green500
-        "NEEDS_REVISION" -> Yellow500
-        else             -> Red500
-    }
-
-    Card(
-        modifier  = Modifier.fillMaxWidth(),
-        shape     = RoundedCornerShape(12.dp),
-        colors    = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+private fun RetailerButton(label: String, url: String, context: Context, modifier: Modifier = Modifier) {
+    OutlinedButton(
+        onClick  = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) },
+        modifier = modifier.height(32.dp),
+        shape    = RoundedCornerShape(6.dp),
+        border   = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+        contentPadding = PaddingValues(horizontal = 6.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Star, contentDescription = null,
-                    tint = accentColor, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Text("Score", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                    Text("${feedback.score}/100",
-                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                        color = statusColor)
-                }
-                Surface(color = statusColor.copy(alpha = 0.1f), shape = RoundedCornerShape(8.dp)) {
-                    Text(feedback.status.replace("_", " "),
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = statusColor,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            LabelValue("Detected Style", feedback.detectedStyle)
-            Spacer(modifier = Modifier.height(8.dp))
-            LabelValue("Summary", feedback.critiqueSummary)
-
-            if (feedback.flaws.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Flaws", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                feedback.flaws.forEach { flaw ->
-                    Row(modifier = Modifier.padding(top = 2.dp)) {
-                        Text("• ", color = Red500)
-                        Text(flaw, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-
-            if (feedback.suggestionForImprovement.isNotBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Surface(color = accentColor.copy(alpha = 0.1f), shape = RoundedCornerShape(8.dp)) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text("💡 Suggestion",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = accentColor)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(feedback.suggestionForImprovement,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface)
-                    }
-                }
-            }
-        }
+        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp))
     }
 }
 
@@ -732,43 +1015,27 @@ fun DirectorCritiqueCard(
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-@Composable
-private fun LabelValue(label: String, value: String) {
-    Column {
-        Text(label, style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-        Text(value, style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface)
-    }
-}
-
-
-
-private fun parseHexColor(hex: String): Color = try {
-    val cleaned   = hex.trim().removePrefix("#")
-    val colorLong = java.lang.Long.parseLong(cleaned, 16)
-    Color(
-        red   = ((colorLong shr 16) and 0xFF) / 255f,
-        green = ((colorLong shr 8)  and 0xFF) / 255f,
-        blue  = (colorLong and 0xFF) / 255f
-    )
+fun parseHexColor(hex: String): Color = try {
+    val cleaned = hex.trim().removePrefix("#")
+    val v = java.lang.Long.parseLong(cleaned.padEnd(6, '0').take(6), 16)
+    Color(red = ((v shr 16) and 0xFF) / 255f, green = ((v shr 8) and 0xFF) / 255f, blue = (v and 0xFF) / 255f)
 } catch (e: Exception) { Color.Gray }
 
 private fun saveImageToGallery(bitmap: Bitmap, context: Context) {
     val filename = "aesthetic_scene_${System.currentTimeMillis()}.png"
     val outputStream: OutputStream?
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        val contentValues = ContentValues().apply {
+        val cv = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, filename)
             put(MediaStore.Images.Media.MIME_TYPE, "image/png")
             put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/AestheticEye")
         }
-        val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+        val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv)
         outputStream = uri?.let { context.contentResolver.openOutputStream(it) }
     } else {
-        val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-        val appDir = java.io.File(picturesDir, "AestheticEye").apply { mkdirs() }
-        outputStream = java.io.File(appDir, filename).outputStream()
+        val dir  = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES)
+        val app  = java.io.File(dir, "AestheticEye").apply { mkdirs() }
+        outputStream = java.io.File(app, filename).outputStream()
     }
-    outputStream?.use { stream -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream) }
+    outputStream?.use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
 }

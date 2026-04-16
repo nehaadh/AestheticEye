@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,6 +20,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -26,19 +29,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
-/**
- * Reusable image picker card with photo picker AND a "Paste URL" option.
- *
- * @param label         Text shown on the card
- * @param icon          Icon shown when no image is selected
- * @param bitmap        The currently selected bitmap (null = empty state)
- * @param onImagePicked Called when user picks from camera/gallery
- * @param onClear       Called when user taps the X to clear
- * @param onUrlImport   Called when user taps "Paste URL" — opens the URL sheet
- * @param optional      If true, shows "(Optional)" hint
- * @param modifier      Modifier for the card
- */
 @Composable
 fun ImageUploadCard(
     label: String,
@@ -57,128 +49,157 @@ fun ImageUploadCard(
     }
 
     Column(
-        modifier = modifier,
+        modifier            = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Card(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(1f)
+                .aspectRatio(0.82f)
                 .clickable { launcher.launch("image/*") },
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            shape          = RoundedCornerShape(16.dp),
+            color          = if (bitmap != null)
+                MaterialTheme.colorScheme.surfaceVariant
+            else
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+            border         = if (bitmap == null)
+                BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+            else null,
+            tonalElevation = if (bitmap != null) 2.dp else 0.dp
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
+
                 if (bitmap != null) {
-                    // Show the selected image
+                    // ── Filled state ─────────────────────────────────────────
                     Image(
-                        bitmap = bitmap.asImageBitmap(),
+                        bitmap             = bitmap.asImageBitmap(),
                         contentDescription = label,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
+                        contentScale       = ContentScale.Crop,
+                        modifier           = Modifier
                             .fillMaxSize()
                             .clip(RoundedCornerShape(16.dp))
                     )
 
                     // Clear button
-                    IconButton(
-                        onClick = onClear,
+                    Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(4.dp)
-                            .size(28.dp)
+                            .padding(6.dp)
+                            .size(26.dp)
                             .background(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
                                 CircleShape
                             )
+                            .clickable { onClear() },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.Default.Close,
                             contentDescription = "Clear",
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurface
+                            modifier = Modifier.size(14.dp),
+                            tint     = MaterialTheme.colorScheme.onSurface
                         )
                     }
 
-                    // Label overlay at bottom
-                    Surface(
+                    // Gradient label scrim at bottom
+                    Box(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
+                            .fillMaxWidth()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.52f))
+                                )
+                            )
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
                     ) {
                         Text(
-                            text = label,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelSmall.copy(
+                            text     = label,
+                            style    = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.SemiBold
                             ),
+                            color    = Color.White,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+
                 } else {
-                    // Empty state
+                    // ── Empty state ───────────────────────────────────────────
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .padding(10.dp),
+                        verticalArrangement   = Arrangement.Center,
+                        horizontalAlignment   = Alignment.CenterHorizontally
                     ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Surface(
+                            color    = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            shape    = CircleShape,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector        = icon,
+                                    contentDescription = null,
+                                    tint               = MaterialTheme.colorScheme.primary,
+                                    modifier           = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
                         Text(
-                            text = label,
-                            style = MaterialTheme.typography.labelMedium,
+                            text      = label,
+                            style     = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
                             textAlign = TextAlign.Center,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurface
+                            maxLines  = 2,
+                            overflow  = TextOverflow.Ellipsis,
+                            color     = MaterialTheme.colorScheme.onSurface
                         )
+
                         if (optional) {
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "(Optional)",
-                                style = MaterialTheme.typography.labelSmall,
+                                text  = "Optional",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
                         Text(
-                            text = "Tap to select",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                            text  = "Tap to select",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                         )
                     }
                 }
             }
         }
 
-        // "Paste URL" link below the card
+        // Paste URL link below card
         if (onUrlImport != null) {
             TextButton(
-                onClick = onUrlImport,
-                modifier = Modifier.height(28.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                onClick        = onUrlImport,
+                modifier       = Modifier.height(28.dp),
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
             ) {
                 Icon(
                     Icons.Default.Search,
                     contentDescription = null,
-                    modifier = Modifier.size(12.dp),
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                    modifier = Modifier.size(11.dp),
+                    tint     = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
                 )
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(3.dp))
                 Text(
                     "Paste URL",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
                 )
             }
         }
