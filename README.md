@@ -1,6 +1,6 @@
 # Aesthetic Eye – Android App
 
-> AI-powered interior design assistant that visualizes product placement in real rooms, delivers expert design critiques, and learns how to improve your space — all from your phone.
+> AI-powered interior design assistant that visualizes product placement in real rooms, delivers expert design critiques, and learns how to improve your space: all from your phone.
 
 Upload a room photo, add products (from your camera, gallery, or **any product URL**), and Aesthetic Eye generates a photorealistic composite scene scored by a simulated Design Director. Keep adding products one by one until your room is complete. Then tap "See AI's Improvement" and watch the AI redesign your scene with a full list of changes.
 
