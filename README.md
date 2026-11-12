@@ -265,5 +265,5 @@ Connect a device with USB debugging enabled, or use the emulator. Click Run.
 
 ## Authors
 
-Bibhusa Rawal and Neha Adhikari  
+Researcher: Bibhusa Rawal and Developer: Neha Adhikari  
 Stony Brook University, Application Development, Spring 2026
